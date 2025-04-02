@@ -37,7 +37,7 @@ maximum_scaling = [
 ]
 absminimum_maximum_scaling = ["U component of wind", "V component of wind","u700", "v700"]
 
-fcst_norm = load_fcst_norm(model="ifs", year=2018)
+#fcst_norm = load_fcst_norm(model="ifs", year=2018)
 ## get some standard stuff from utils
 fcst_time_res, time_res, lonlatbox, fcst_spat_res = get_metadata()
 

@@ -70,12 +70,12 @@ FCST_TIME_RES = 3
 ## Put all directories here
 
 TRUTH_PATH = (
-    "../example_datasets/"
+    "/home/n/nath/cGAN/shruti/xarray_batcher/example_datasets/"
 )
-FCST_PATH = "../example_datasets/"
-FCST_PATH_IFS = "../example_datasets/"
+FCST_PATH = ""
+FCST_PATH_IFS = ""
 
-CONSTANTS_PATH = "../example_datasets/constants-regICPAC/"
+CONSTANTS_PATH = "/home/n/nath/cGAN/shruti/xarray_batcher/example_datasets/constants-regICPAC/"
 
 TFRECORDS_PATH = ""
 

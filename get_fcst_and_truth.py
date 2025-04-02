@@ -1,8 +1,10 @@
 import glob
 import os
 import time
+from datetime import datetime, timedelta
 import numpy as np
 import xarray as xr
+import h5py
 import dask
 from tqdm import tqdm
 from tqdm.dask import TqdmCallback
@@ -21,7 +23,7 @@ FCST_PATH, FCST_PATH_IFS, TRUTH_PATH, CONSTANTS_PATH, TFRECORDS_PATH = get_paths
 def get_IMERG_lonlat():
 
      # A single IMERG data file to get latitude and longitude
-    IMERG_file_name = "../example_datasets/TIP021_MCRAECOOPER_IFS/IMERG_V07/2018/Jan/3B-HHR.MS.MRG.3IMERG.20180116-S120000-E122959.0720.V07B.HDF5"
+    IMERG_file_name = "/home/n/nath/cGAN/shruti/xarray_batcher/example_datasets/3B-HHR.MS.MRG.3IMERG.20180116-S120000-E122959.0720.V07B.HDF5"
 
     # HDF5 in the ICPAC region
     h5_file = h5py.File(IMERG_file_name)
@@ -364,7 +366,7 @@ def get_IMERG_year(years, months=[3,4,5,6]):
 
     year_beg, year_end, month_beg, month_end = prepare_year_and_month_input(years, months)
     
-    latitude, longitude = get_IMERG_lonlat(TRUTH_PATH)
+    latitude, longitude = get_IMERG_lonlat()
     
     # Load the IMERG data averaged over 6h periods
     d = datetime(year_beg,month_beg,1,6)
