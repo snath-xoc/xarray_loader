@@ -70,14 +70,14 @@ FCST_TIME_RES = 3
 ## Put all directories here
 
 TRUTH_PATH = (
-    "/network/group/aopp/predict/TIP021_MCRAECOOPER_IFS/IMERG_V07/ICPAC_region/6h/"
+    "../example_datasets/"
 )
-FCST_PATH = "/network/group/aopp/predict/TIP022_NATH_GFSAIMOD/netcdf/"
-FCST_PATH_IFS = "/network/group/aopp/predict/TIP021_MCRAECOOPER_IFS/IFS-regICPAC-meansd/"
+FCST_PATH = "../example_datasets/"
+FCST_PATH_IFS = "../example_datasets/"
 
-CONSTANTS_PATH = "/network/group/aopp/predict/TIP022_NATH_GFSAIMOD/cGAN/constants-regICPAC/"
+CONSTANTS_PATH = "../example_datasets/constants-regICPAC/"
 
-TFRECORDS_PATH = "/network/group/aopp/predict/TIP022_NATH_GFSAIMOD/cGAN/tfrecords/"
+TFRECORDS_PATH = ""
 
 
 def get_config():
