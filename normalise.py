@@ -2,11 +2,8 @@
 ## not too many function comments as I feel like they are self-explanatory
 
 import numpy as np
-import utils
+from .utils import get_config, load_fcst_norm, get_metadata
 
-import importlib
-
-importlib.reload(utils)
 
 
 ## Unfortunately need to have this look up table, not sure what a work around is
@@ -17,7 +14,7 @@ precip_fields = ["Convective precipitation (water)", "Total Precipitation", "cp"
     _,
     accumulated_fields,
     nonnegative_fields,
-) = utils.get_config()
+) = get_config()
 
 ## Normalisation to apply !!! make sure a field doesn't appear twice!!!
 standard_scaling = ["Surface pressure", "2 metre temperature","sp","t2m"]
@@ -40,9 +37,9 @@ maximum_scaling = [
 ]
 absminimum_maximum_scaling = ["U component of wind", "V component of wind","u700", "v700"]
 
-fcst_norm = utils.load_fcst_norm(model="ifs", year=2018)
+fcst_norm = load_fcst_norm(model="ifs", year=2018)
 ## get some standard stuff from utils
-fcst_time_res, time_res, lonlatbox, fcst_spat_res = utils.get_metadata()
+fcst_time_res, time_res, lonlatbox, fcst_spat_res = get_metadata()
 
 
 def logprec(data, threshold=0.1, fill_value=0.02,mean=0.051, std=0.266):
