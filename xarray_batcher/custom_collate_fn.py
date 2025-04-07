@@ -1,6 +1,42 @@
 import numpy as np
 import torch
 
+def _get_func(name):
+    """
+    transform a function given as str to a python function
+    :param name: str, correspond to a function,
+            supported: 'exp', 'power-x' (x the wanted power)
+    :return: numpy fuction
+    """
+    if name in ['exp', 'exponential']:
+        return np.exp
+    if 'power-' in name:
+        x = float(name.split('-')[1])
+        def pow(input):
+            return np.power(input, x)
+        return pow
+    else:
+        try:
+            return eval(name)
+        except Exception:
+            return None
+
+
+def _get_X_with_func_appl(X, functions, axis):
+    """
+    apply a list of functions to the paths in X and append X by the outputs
+    along the given axis
+    :param X: np.array, with the data,
+    :param functions: list of functions to be applied
+    :param axis: int, the data_dimension (not batch and not time dim) along
+            which the new paths are appended
+    :return: np.array
+    """
+    Y = X
+    for f in functions:
+        Y = np.concatenate([Y, f(X)], axis=axis)
+    return Y
+
 
 def CustomCollateFnGen(func_names=None):
     """

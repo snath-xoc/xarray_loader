@@ -6,29 +6,24 @@ import numpy as np
 import xarray as xr
 import datetime
 
-from kerchunk.zarr import ZarrToZarr
-from kerchunk.combine import MultiZarrToZarr
+#from kerchunk.zarr import ZarrToZarr
+#from kerchunk.combine import MultiZarrToZarr
 from tqdm import tqdm
 import xesmf
 
-import utils
-import normalise as nm
-
-import importlib
-
-importlib.reload(utils)
-importlib.reload(nm)
+from .utils import get_config, get_metadata, get_paths
+from .normalise import nonnegative, convert_units, get_norm, logprec
 
 (
     all_fcst_fields,
     all_fcst_levels,
     accumulated_fields,
     nonnegative_fields,
-) = utils.get_config()
+) =  get_config()
 
-FCST_PATH, FCST_PATH_IFS, TRUTH_PATH, CONSTANTS_PATH, TFRECORDS_PATH = utils.get_paths()
+FCST_PATH, FCST_PATH_IFS, TRUTH_PATH, CONSTANTS_PATH, TFRECORDS_PATH = get_paths()
 
-fcst_time_res, time_res, lonlatbox, fcst_spat_res = utils.get_metadata()
+fcst_time_res, time_res, lonlatbox, fcst_spat_res = get_metadata()
 
 
 def daterange(start_date, end_date):
@@ -401,13 +396,13 @@ def streamline_and_normalise_zarr(field, da, regrid=True, norm=True, log_prec=Tr
         da = var_and_norm_over_day(da)
     
     if field in nonnegative_fields:
-        da = nm.nonnegative(da)
+        da = nonnegative(da)
 
-    da = nm.convert_units(da, field, log_prec, m_to_mm=False)
+    da = convert_units(da, field, log_prec, m_to_mm=False)
 
     if norm:
         
-        da = nm.get_norm(da, field, location_of_vals=location_of_vals)
+        da = get_norm(da, field, location_of_vals=location_of_vals)
             
     warnings.filterwarnings("ignore", category=UserWarning)
     if regrid:
@@ -455,12 +450,12 @@ def streamline_and_normalise_ifs(field, da, log_prec=True, norm=True, split_step
 
 
     if field in ['cape', 'cp', 'mcc', 'sp', 'ssr', 't2m', 'tciw', 'tclw', 'tcrw', 'tcw', 'tcwv', 'tp']:
-        da = nm.nonnegative(da)
+        da = nonnegative(da)
 
-    da = nm.convert_units(da, field, log_prec, m_to_mm=True)
+    da = convert_units(da, field, log_prec, m_to_mm=True)
 
     if norm:
-        da = nm.get_norm(da, field)
+        da = get_norm(da, field)
 
     return da.where(np.isfinite(da), 0).sortby("time")
         
@@ -498,7 +493,7 @@ def load_truth_and_mask(dates, time_idx=[5,6,7,8], log_precip=True, normalise=Tr
             ds = xr.open_dataset(data_path[0])
     
             if log_precip:
-                ds["precipitation"] = nm.logprec(ds["precipitation"])
+                ds["precipitation"] = logprec(ds["precipitation"])
             
             # mask: False for valid truth data, True for invalid truth data
             # (compatible with the NumPy masked array functionality)
