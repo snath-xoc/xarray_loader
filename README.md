@@ -36,7 +36,7 @@ Where for inference we need to match the forecast to the valid time i.e.,
 time+timedelta(timestep)==>valid_time
 ```
 
-Other than matching forecast to valid time, in training weather data we may want to format data in different ways. For example, if it is to simulate irregularly sampled or discontinuous data, it may be desirable to stocastically generate discontinuous paths.
+Other than matching forecast to valid time, in training weather data we may want to format data in different ways. For example, if it is to simulate irregularly sampled or discontinuous data, it may be desirable to stochastically generate discontinuous paths.
 
 Moreover to calculate graph networks we may want a **NearestNeighbour** search per batch based on the radial coordinates:
 
