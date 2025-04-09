@@ -52,7 +52,7 @@ Data loading flow
 ---
 When loading in truth data, there is no need to stream/lazy load as the magnitude of data is low and optimisation within pytorch's DataLoader is enough.
 
-However, it gets more complicated when we also want to load multiple forecast variables at the same time, instead of just truth data: it's just way more data to load at once! We plan to utilise pytorch's IterableDataset class to stream in batches, but there's a catch! What if we want dynamic sampling of data? One could of course create a sampler, however for more flexibility we plan the following dask-optimised route (Note: this unpacks what is under the hood in xr.openmfdataset):
+However, it gets more complicated when we also want to load multiple forecast variables at the same time, instead of just truth data: it's just way more data to load at once! We plan to utilise pytorch's IterableDataset class to stream in batches, but there's a catch! What if we want dynamic sampling of data? One could of course create a sampler, however for more flexibility we plan the following dask-optimised route (Note: this unpacks what is under the hood in xr.open_mfdataset):
 
 ![Screenshot 2025-04-09 at 13 25 22](https://github.com/user-attachments/assets/27f2f278-9ba7-4678-ab8b-47d0501a88ab)
 
