@@ -36,7 +36,7 @@ Where for inference we need to match the forecast to the valid time i.e.,
 time+timedelta(timestep)==>valid_time
 ```
 
-Other than matching forecast to valid time, in training weather data we may want to format data in different ways. For example, if it is to simulate irregularly sampled or discontinuous data, it may be desirable to stocahstically generate discontinuous paths.
+Other than matching forecast to valid time, in training weather data we may want to format data in different ways. For example, if it is to simulate irregularly sampled or discontinuous data, it may be desirable to stocastically generate discontinuous paths.
 
 Moreover to calculate graph networks we may want a **NearestNeighbour** search per batch based on the radial coordinates:
 
@@ -88,9 +88,9 @@ This will call the generator function to randomly sample discontinuous paths of 
 Check the issue tracker [here](https://github.com/snath-xoc/xarray_loader/issues). The most pressing changes:
 
 1) Deprecate initial GFS load in and Tensorflow batcher modalities using kerchunk (moved to experimental_tensorflow)
-2) Add IterableDataset switch: not sure if a one-size-fits all here is possible but when we switch to having both forecast and turth data we need to switch to data streaming (potentially with reload after n epoch but this us overkill from prelim. experiments). Main steps here is to refactor the dask based open_mfzarr and modify functions to allow slicing on single files.
+2) Add IterableDataset switch: not sure if a one-size-fits-all here is possible but when we switch to having both forecast and truth data we need to switch to data streaming (potentially with reload after n epoch but this is overkill from prelim. experiments). Main steps here is to refactor the dask based open_mfzarr and modify functions to allow slicing on single files.
 3) Allow custom-collate function that returns numpy function and implement np.savez for JAX
-4) Allow load in from pre-created npz file with memore mapping
+4) Allow load in from pre-created npz file with memory mapping
 
 
 ## Appendix and FAQ
