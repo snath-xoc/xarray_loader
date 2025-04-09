@@ -12,7 +12,7 @@ Xarray Loader for forecast data
 
 ## Gist of it.
 
-Forecast data is multi-dimensional, now that we have lovely zarr-format data it literally is structured into scalable sub-directories like this (in a simplified manner), although the same holds for any Hierarchical Data Format types (HDF, netCDF4) but not literally:
+Forecast data is multi-dimensional, now that we have lovely zarr-format data it literally is structured into scalable sub-directories like this (in a simplified manner), although the same figuratively holds for any Hierarchical Data Format types (HDF, netCDF4):
 
 ```bash!
 .
