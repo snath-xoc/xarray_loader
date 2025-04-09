@@ -81,7 +81,7 @@ for d in dl:
     break
 
 ```
-This will call the generator function to randomly sample discontinuous paths of rainfall images. Patching is done within to return 128x128 images or the whole domain for validaiton set.
+This will call the generator function to randomly sample discontinuous paths of rainfall images. Patching is done within to return 128x128 images or the whole domain for validation set.
 
 ## Timeline
 
