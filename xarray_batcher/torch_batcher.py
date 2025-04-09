@@ -146,13 +146,13 @@ class BatchDataset(torch.utils.data.Dataset):
 
         X_batch = []
         for x,variable in zip(self.X_generator,self.variables):
-            try:
-                X_batch.append(x[variable].sel({"time":time_batch,
+            #try:
+            X_batch.append(x[variable].sel({"time":time_batch,
                                           "lat":lat_batch,
                                          "lon":lon_batch}).values)
-            except:
-                print(variable,time_batch)
-                X_batch.append(np.zeros([len(time_batch),len(lat_batch),len(lon_batch),4]))    
+            #except:
+            #    print(variable,time_batch)
+            #    X_batch.append(np.zeros([len(time_batch),len(lat_batch),len(lon_batch),4]))    
             
 
         X_batch = torch.tensor(

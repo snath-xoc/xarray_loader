@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools >= 61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "xarray_loader"
+
+version = "2025.0.0"
+
+description = "Xarray loader to stream forecast data using pytorch IterableDataset and XBatcher"
+readme = "README.md"
+maintainers = [{name = "Shruti Nath", email = "shruti.nath@physics.ox.ac.uk"}]
+dependencies = ["pytorch","torchvision","xarray","xbatcher","tqdm","zarr","netCDF4","dask"]
+requires-python = ">=3.7"
+
+[project.urls]
+repository = "https://github.com/snath-xoc/xarray_loader.git"
+tracker = "https://github.com/snath-xoc/xarray_loader/issues"
+
+[tool.black]
+    py36 = true
+    include = '\.pyi?$'
+    exclude = '''
+    /(
+        \.git
+      | \.hg
+      | \.mypy_cache
+      | \.tox
+      | \.venv
+      | _build
+      | buck-out
+      | build
+      | dist
+
+      # The following are specific to Black, you probably don't want those.
+      | blib2to3
+      | tests/data
+    )/'''
