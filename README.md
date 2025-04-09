@@ -1,7 +1,4 @@
----
-title: 'Xarray Loader'
-disqus: hackmd
----
+
 
 Xarray Loader for forecast data
 ===
@@ -12,10 +9,6 @@ Xarray Loader for forecast data
 ![zarr](https://img.shields.io/badge/zarr-hotpink)
 ![lightning](https://img.shields.io/badge/lighting-violet)
 
-
-## Table of Contents
-
-[TOC]
 
 ## Gist of it.
 
