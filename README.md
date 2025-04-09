@@ -36,9 +36,9 @@ Where for inference we need to match the forecast to the valid time i.e.,
 time+timedelta(timestep)==>valid_time
 ```
 
-Other than matching forecast to valid time, in training weather data we may want to format data in different ways. For example, if it is to simulate irregularly sampled of discontinuous data, it may be desirable to be able stocahstically generate discontinuous paths.
+Other than matching forecast to valid time, in training weather data we may want to format data in different ways. For example, if it is to simulate irregularly sampled or discontinuous data, it may be desirable to stocahstically generate discontinuous paths.
 
-Moreover to calculate graph networks we may want a **NearestNeighbour** search based on the radial coordinates:
+Moreover to calculate graph networks we may want a **NearestNeighbour** search per batch based on the radial coordinates:
 
 ```python!
 x = elev * np.cos(lat) * np.cos(lon)
@@ -46,13 +46,13 @@ y = elev * np.cos(lat) * np.sin(lon)
 z = elev * np.sin(lat)
 ```
 
-This package grew out of this necessity to switch between different model configurations and input formats (i.e., discontinuous, graph or simply forecast data with varying number of input features).
+This package grew out of necessity to switch between different model configurations and input formats (i.e., discontinuous, graph or simply forecast data with varying number of input features).
 
 Data loading flow
 ---
 When loading in truth data, there is no need to stream/lazy load as the magnitude of data is low and optimisation within pytorch's DataLoader is enough.
 
-However it gets more complicated when we want to download multiple forecast variables at the same time ontop of just truth data: it's just way more data to load at once. We plan to utilise pytorch's IterableDataset class to stream in batches, but there's a catch! What if we want dynamic sampling of data? One could of course create a sampler, however for more flexibility we plan the following:
+However, it gets more complicated when we also want to load multiple forecast variables at the same time, instead of just truth data: it's just way more data to load at onc! We plan to utilise pytorch's IterableDataset class to stream in batches, but there's a catch! What if we want dynamic sampling of data? One could of course create a sampler, however for more flexibility we plan the following dask-optimised route (Note: this unpacks what is under the hood in xr.openmfdataset):
 
 ![Screenshot 2025-04-09 at 13 25 22](https://github.com/user-attachments/assets/27f2f278-9ba7-4678-ab8b-47d0501a88ab)
 
