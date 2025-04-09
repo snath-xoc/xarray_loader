@@ -54,18 +54,8 @@ When loading in turth data, there is no need to stream/lazy load as the magnitud
 
 We plan to utilise pytorch's IterableDataset class to stream in batches, but there's a catch! What if we want dynamic sampling of data? One could of course create a sampler, however for more flexibility we plan the following:
 
+![Screenshot 2025-04-09 at 13 25 22](https://github.com/user-attachments/assets/27f2f278-9ba7-4678-ab8b-47d0501a88ab)
 
-```graphviz
-digraph graphname {
-W [label="Initial load-in of truth"]
-S [label="Create custom sampler file" ]
-R [label="Set attributes within IterableDataset in e.g., lightning datamodule"]
-G [label="__iter__: dask load-in multiple variables and match valid time and latxlon patch"]
-W->S
-S->R
-R->G
-}
-```
 
 Commands e.g. for_NJ can be used to generate irregularly sampled fields or do greedy nearest neighbour searches
 
