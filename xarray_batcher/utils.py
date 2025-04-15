@@ -1,8 +1,9 @@
 ## Utils needed in loading zarr and batching
-import os
 import datetime
-import numpy as np
+import os
 import pickle
+
+import numpy as np
 
 ## Put all forecast fields, their levels (can be None also), and specify categories of accumulated fields
 accumulated_fields = ["ssr", "cp", "tp"]
@@ -18,13 +19,16 @@ FCST_TIME_RES = 3
 ## Put all directories here
 
 TRUTH_PATH = (
-   "/network/group/aopp/predict/TIP021_MCRAECOOPER_IFS/IMERG_V07/ICPAC_region/6h/"
+    "/network/group/aopp/predict/TIP021_MCRAECOOPER_IFS/IMERG_V07/ICPAC_region/6h/"
 )
-FCST_PATH_IFS = "/network/group/aopp/predict/TIP021_MCRAECOOPER_IFS/IFS-regICPAC-meansd/"
+FCST_PATH_IFS = (
+    "/network/group/aopp/predict/TIP021_MCRAECOOPER_IFS/IFS-regICPAC-meansd/"
+)
 
-CONSTANTS_PATH = "/network/group/aopp/predict/TIP022_NATH_GFSAIMOD/cGAN/constants-regICPAC/"
+CONSTANTS_PATH = (
+    "/network/group/aopp/predict/TIP022_NATH_GFSAIMOD/cGAN/constants-regICPAC/"
+)
 
-TFRECORDS_PATH = ""
 
 def get_metadata():
 
@@ -37,16 +41,21 @@ def get_metadata():
 
 def get_paths():
 
-    return FCST_PATH_IFS, TRUTH_PATH, CONSTANTS_PATH, TFRECORDS_PATH
+    return FCST_PATH_IFS, TRUTH_PATH, CONSTANTS_PATH
+
 
 import pickle
 
+
 def load_fcst_norm(year=2018):
 
-    fcstnorm_path = os.path.join(CONSTANTS_PATH.replace('-regICPAC','_IFS'), f"FCSTNorm{year}.pkl")
-        
-    with open(fcstnorm_path, 'rb') as f:
+    fcstnorm_path = os.path.join(
+        CONSTANTS_PATH.replace("-regICPAC", "_IFS"), f"FCSTNorm{year}.pkl"
+    )
+
+    with open(fcstnorm_path, "rb") as f:
         return pickle.load(f)
+
 
 def daterange(start_date, end_date):
 
@@ -64,7 +73,6 @@ def get_valid_dates(
     start_hour=30,
     end_hour=60,
     raw_list=False,
-    
 ):
 
     """
@@ -102,9 +110,11 @@ def get_valid_dates(
         for hr in np.arange(start_hour, end_hour, TIME_RES):
             datestr_true = curdate + datetime.timedelta(hours=6)
             datestr_true = datestr_true.strftime("%Y%m%d_%H")
-            fname = f"{datestr_true}"#{hr:02}
+            fname = f"{datestr_true}"  # {hr:02}
 
-            if not os.path.exists(os.path.join(TRUTH_PATH, f"{datestr_true[:4]}/{fname}.nc")):
+            if not os.path.exists(
+                os.path.join(TRUTH_PATH, f"{datestr_true[:4]}/{fname}.nc")
+            ):
                 valid = False
                 break
 
@@ -114,12 +124,13 @@ def get_valid_dates(
     if raw_list:
         # Need to get it from datetime to numpy readable format
         valid_dates = [date.strftime("%Y-%m-%d") for date in valid_dates]
-    
+
     return valid_dates
 
-def match_fcst_to_valid_time(valid_times, time_idx, step_type='h'):
 
-    '''
+def match_fcst_to_valid_time(valid_times, time_idx, step_type="h"):
+
+    """
     Inputs
     ------
     valid_times: ndarray or datetime64 object
@@ -129,27 +140,23 @@ def match_fcst_to_valid_time(valid_times, time_idx, step_type='h'):
               default = 6
     time_idx: int
               array of prediction timedelta of same shape
-              as valid_dates, should be in hours, 
+              as valid_dates, should be in hours,
               data type = int.
     step_type: str
                  type of fcst step e.g., D for day
                  default: 'h' for hour
-    
+
     Outputs
     -------
     fcst_dates: ndarray
-                i.e., valid_dates-time_idx 
+                i.e., valid_dates-time_idx
     valid_date_idx: ndarray
                     to select
-    '''
-        
-    time_offset = np.timedelta64(time_idx,step_type)
-    fcst_times = valid_times-time_offset
+    """
 
-    valid_date_idx = np.asarray([int(time_offset.astype(int)/TIME_RES)])
+    time_offset = np.timedelta64(time_idx, step_type)
+    fcst_times = valid_times - time_offset
+
+    valid_date_idx = np.asarray([int(time_offset.astype(int) / TIME_RES)])
 
     return fcst_times, valid_date_idx
-
-    
-    
-    

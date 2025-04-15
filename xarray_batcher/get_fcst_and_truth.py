@@ -12,7 +12,7 @@ from .loading import (
 )
 from .utils import get_paths, get_valid_dates, match_fcst_to_valid_time
 
-FCST_PATH_IFS, TRUTH_PATH, CONSTANTS_PATH, TFRECORDS_PATH = get_paths()
+FCST_PATH_IFS, TRUTH_PATH, CONSTANTS_PATH = get_paths()
 
 
 def open_mfzarr(
@@ -25,9 +25,9 @@ def open_mfzarr(
     months=[3, 4, 5, 6],
     dates=None,
     time_idx=None,
-    split_steps=[5,6,7,8,9]
+    split_steps=[5, 6, 7, 8, 9],
 ):
-    '''
+    """
     Open multiple files using dask delayed
 
     Inputs
@@ -41,13 +41,12 @@ def open_mfzarr(
     -------
     List of xr.DataArray or xr.Dataset we avoid concatenation
     as this takes to long, but through modify, we are confident
-    that the times align.    
-    '''
+    that the times align.
+    """
 
     # this is basically what open_mfdataset does
     open_kwargs = dict(decode_cf=True, decode_times=True)
-    open_tasks = [dask.delayed(xr.open_dataset)(f, **open_kwargs)\
-                  for f in file_names]
+    open_tasks = [dask.delayed(xr.open_dataset)(f, **open_kwargs) for f in file_names]
 
     tasks = [
         dask.delayed(modify)(
@@ -66,27 +65,28 @@ def open_mfzarr(
     ]
 
     datasets = dask.compute(tasks)  # get a list of xarray.Datasets
-    combined = datasets[0] # or some combination of concat, merge
+    combined = datasets[0]  # or some combination of concat, merge
     dates = []
     for dataset in combined:
         dates += list(np.unique(dataset.time.values.astype("datetime64[D]")))
 
     return combined, dates
 
+
 def modify(
-        ds,
-        use_modify=False,
-        centre=[-1.25, 36.80],
-        window_size=2,
-        lats=None,
-        lons=None,
-        months=[3, 4, 5, 6],
-        dates=None,
-        time_idx=None,
-        split_steps=[5,6,7,8,9],
+    ds,
+    use_modify=False,
+    centre=[-1.25, 36.80],
+    window_size=2,
+    lats=None,
+    lons=None,
+    months=[3, 4, 5, 6],
+    dates=None,
+    time_idx=None,
+    split_steps=[5, 6, 7, 8, 9],
 ):
 
-    '''
+    """
     Modification function to wrap around dask delayed compute
 
     Inputs
@@ -118,7 +118,7 @@ def modify(
     without modifications
 
     **Note: when time_idx is provided, split_steps is ignored**
-    '''
+    """
 
     if use_modify:
         name = [var for var in ds.data_vars]
@@ -127,13 +127,13 @@ def modify(
             lon_batch = np.round(lons, decimals=2)
 
             ds = ds.sel(time=ds.time.dt.month.isin(months)).sel(
-            {
-                "latitude": lat_batch,
-                "longitude": lon_batch,
-            }
-        )
+                {
+                    "latitude": lat_batch,
+                    "longitude": lon_batch,
+                }
+            )
         else:
-            
+
             ds = ds.sel(time=ds.time.dt.month.isin(months)).sel(
                 {
                     "latitude": slice(centre[0] - window_size, centre[0] + window_size),
@@ -147,18 +147,18 @@ def modify(
                 ds.time.values.astype("datetime64[D]"), dates, return_indices=True
             )
             ds = ds.isel(time=dates_intersect)
-            
-        ds = streamline_and_normalise_ifs(name[1].split("_")[0], ds, time_idx=time_idx,
-                                         split_steps=split_steps).to_dataset(
-            name=name[1].split("_")[0]
-        )
+
+        ds = streamline_and_normalise_ifs(
+            name[1].split("_")[0], ds, time_idx=time_idx, split_steps=split_steps
+        ).to_dataset(name=name[1].split("_")[0])
         return ds
-    
+
     else:
         return ds
 
+
 def stream_ifs(truth_batch, offset=24, variables=None):
-    '''
+    """
     Input
     -----
     truth_batch: xr.DataArray or xr.Dataset
@@ -169,73 +169,75 @@ def stream_ifs(truth_batch, offset=24, variables=None):
             day offset to factor in, should be in hours
 
     variables: list or None
-               variables to load, if None then all are 
+               variables to load, if None then all are
                loaded.
     Output
     ------
 
     forecast batch as ndarray
-    '''
+    """
 
     batch_time = truth_batch.time.values
     batch_lats = truth_batch.lat.values
     batch_lons = truth_batch.lon.values
 
     if not isinstance(batch_time, np.ndarray):
-        batch_time=np.asarray(batch_time)
+        batch_time = np.asarray(batch_time)
 
     # Get hours in the truth_batch times object
     # First need to convert to format with base units of hours to extract hour offset
-    hour = batch_time.astype('datetime64[h]').astype(object)[0].hour
+    hour = batch_time.astype("datetime64[h]").astype(object)[0].hour
 
     # Note that if hour is 0 then we add 24 as this
     # is the offset+24
-    hour = hour+24*(hour==0)+offset
+    hour = hour + 24 * (hour == 0) + offset
 
     fcst_date, time_idx = match_fcst_to_valid_time(batch_time, hour)
-    
-    year = fcst_date.astype('datetime64[D]').astype(object)[0].year
-    month = fcst_date.astype('datetime64[D]').astype(object)[0].month
-        
+
+    year = fcst_date.astype("datetime64[D]").astype(object)[0].year
+    month = fcst_date.astype("datetime64[D]").astype(object)[0].month
+
     if variables is None:
         files = sorted(glob.glob(FCST_PATH_IFS + str(year) + "/" + "*.nc"))
     else:
-        files = [
-            FCST_PATH_IFS + str(year) + "/" + "%s.nc" % var for var in variables
-        ]
+        files = [FCST_PATH_IFS + str(year) + "/" + "%s.nc" % var for var in variables]
 
     ds, dates_modified = open_mfzarr(
-            files,
-            use_modify=True,
-            lats=batch_lats,
-            lons=batch_lons,
-            months=[month],
-            dates=fcst_date,
-            time_idx=time_idx,
-        )
-    assert batch_time.astype('datetime64[D]')==np.unique(dates_modified)
+        files,
+        use_modify=True,
+        lats=batch_lats,
+        lons=batch_lons,
+        months=[month],
+        dates=fcst_date,
+        time_idx=time_idx,
+    )
+    assert batch_time.astype("datetime64[D]") == np.unique(dates_modified)
     return ds
+
 
 def get_whole_year_ifs(
     years,
     centre=[-1.25, 36.80],
     window_size=30,
     months=[3, 4, 5, 6],
-    split_steps=[5,6,7,8,9],
+    split_steps=[5, 6, 7, 8, 9],
     ignore_truth=False,
     variables=None,
 ):
     dates_all = []
 
     if ignore_truth:
-        dates_year = [list(
-            np.arange(
-                "%i-01-01" % year,
-                "%i-01-01" % (year + 1),
-                np.timedelta64(1, "D"),
-                dtype="datetime64[D]",
-            ).astype("str") 
-        ) for year in years]
+        dates_year = [
+            list(
+                np.arange(
+                    "%i-01-01" % year,
+                    "%i-01-01" % (year + 1),
+                    np.timedelta64(1, "D"),
+                    dtype="datetime64[D]",
+                ).astype("str")
+            )
+            for year in years
+        ]
     else:
         dates_year = [get_valid_dates(year, raw_list=True) for year in years]
 
@@ -248,7 +250,7 @@ def get_whole_year_ifs(
             )
         else:
             dates_sel = None
-        
+
         dates_final = np.array(dates.copy(), dtype="datetime64[D]")
         year = dates_final[0].astype(object).year
 
@@ -300,7 +302,8 @@ def get_whole_year_ifs(
     start_time = time.time()
     # time_idx is hard-coded in here as forecast is made to have time as valid_time
     ds_truth_and_mask = load_truth_and_mask(
-        np.array(dates_all, dtype="datetime64[ns]").flatten(), time_idx=[1, 2, 3, 4],
+        np.array(dates_all, dtype="datetime64[ns]").flatten(),
+        time_idx=[1, 2, 3, 4],
     )
     if dates_sel is not None:
         # Because of 6 hour offset when streamlining select dates 6AM to midnight is used
@@ -335,17 +338,27 @@ def get_whole_year_ifs(
     )
 
 
-def get_all(years, model="ifs", offset=None, stream=False, truth_batch=None, time_idx=[5,6,7,8],
-            split_steps=[5,6,7,8,9], ignore_truth=False, variables=None, months=None):
+def get_all(
+    years,
+    model="ifs",
+    offset=None,
+    stream=False,
+    truth_batch=None,
+    time_idx=[5, 6, 7, 8],
+    split_steps=[5, 6, 7, 8, 9],
+    ignore_truth=False,
+    variables=None,
+    months=None,
+):
 
-    '''
+    """
     Wrapper function to return either:
 
     * IFS data alongside truth data fully loaded into memory.
-    This is recommended if an npz file is being created for 
+    This is recommended if an npz file is being created for
     example.
     * stream IFS data in which case truth_batch should be given
-    and the time_idx to obtain the initialisation time from 
+    and the time_idx to obtain the initialisation time from
     truth batch valid time is taken form 'time_idx' (See
     match_fcst_to_valid_time in utils.py
     * Obtain only truth data (when model="truth")
@@ -364,7 +377,7 @@ def get_all(years, model="ifs", offset=None, stream=False, truth_batch=None, tim
     stream: boolean
             whether or not to stream data in which case
             truth batch should be provided
-    truth_batch: xr.DataArray or xr.Dataset 
+    truth_batch: xr.DataArray or xr.Dataset
                  truth batch to obtain forecast variables from
     time_idx: list
               time_idx to obtain truth
@@ -374,32 +387,35 @@ def get_all(years, model="ifs", offset=None, stream=False, truth_batch=None, tim
                   passed on to get_whole_year_ifs, whether to
                   only load in the fcst and ignore turht
     variables: list or None
-               variables to load, if None then all are 
+               variables to load, if None then all are
                loaded.
     months: ndarray or list or None
             months to load in in case of seasonal/sub-seasonal
             training, if None all months are used
-            
+
     Outputs:
     -------
     list of xr.DataArray or streamed or whole IFS+truth or simply truth data
-    '''
+    """
 
     if months is None:
-        months = np.arange(1,13).tolist()
+        months = np.arange(1, 13).tolist()
 
     if model == "ifs":
         if not stream:
-            return get_whole_year_ifs(years, split_steps = split_steps, 
-                                      ignore_truth=ignore_truth,
-                                     variables=variables, months=months)
+            return get_whole_year_ifs(
+                years,
+                split_steps=split_steps,
+                ignore_truth=ignore_truth,
+                variables=variables,
+                months=months,
+            )
 
         else:
             assert truth_batch is not None
             assert offset is not None
             return stream_ifs(truth_batch, offset=offset, variables=variables)
-            
-            
+
     elif model == "truth":
         dates_all = []
         for year in years:
@@ -409,7 +425,8 @@ def get_all(years, model="ifs", offset=None, stream=False, truth_batch=None, tim
         print("Only getting truth values over,", len(dates_all), "dates")
         start_time = time.time()
         ds_truth_and_mask = load_truth_and_mask(
-            np.array(dates_all, dtype="datetime64[ns]").flatten(), time_idx=time_idx,
+            np.array(dates_all, dtype="datetime64[ns]").flatten(),
+            time_idx=time_idx,
         )
 
         print(

@@ -8,8 +8,7 @@ from tqdm import tqdm
 from .normalise import convert_units, get_norm, logprec, nonnegative
 from .utils import get_metadata, get_paths
 
-
-(FCST_PATH_IFS, TRUTH_PATH, CONSTANTS_PATH, TFRECORDS_PATH) = get_paths()
+(FCST_PATH_IFS, TRUTH_PATH, CONSTANTS_PATH) = get_paths()
 
 (fcst_time_res, time_res, lonlatbox, fcst_spat_res) = get_metadata()
 
@@ -82,18 +81,20 @@ def get_lonlat():
         lat_reg_TRUTH_b,
     )
 
+
 def get_IMERG_lonlat():
 
-     # A single IMERG data file to get latitude and longitude
+    # A single IMERG data file to get latitude and longitude
     IMERG_file_name = "../example_datasets/3B-HHR.MS.MRG.3IMERG.20180116-S120000-E122959.0720.V07B.HDF5"
 
     # HDF5 in the ICPAC region
     h5_file = h5py.File(IMERG_file_name)
-    latitude = h5_file['Grid']["lat"][763:1147]
-    longitude = h5_file['Grid']["lon"][1991:2343]
+    latitude = h5_file["Grid"]["lat"][763:1147]
+    longitude = h5_file["Grid"]["lon"][1991:2343]
     h5_file.close()
 
     return latitude, longitude
+
 
 def prepare_year_and_month_input(years, months):
 
@@ -104,14 +105,14 @@ def prepare_year_and_month_input(years, months):
         assert isinstance(months, int)
         months = [months, months]
 
-    assert len(years)>1
-    assert len(months)>1
+    assert len(years) > 1
+    assert len(months) > 1
 
     years = np.sort(years)
     months = np.sort(months)
 
-    assert years[-1]>=years[0]
-    assert months[-1]>=months[0]
+    assert years[-1] >= years[0]
+    assert months[-1] >= months[0]
 
     year_beg = years[0]
     year_end = years[-1]
@@ -119,10 +120,10 @@ def prepare_year_and_month_input(years, months):
     month_beg = months[0]
     month_end = months[-1]
 
-    if month_end==12:
-        year_end+=1
+    if month_end == 12:
+        year_end += 1
     else:
-        month_end+=1
+        month_end += 1
 
     return year_beg, year_end, month_beg, month_end
 
@@ -130,19 +131,19 @@ def prepare_year_and_month_input(years, months):
 def retrieve_vars_ifs(field, all_data_mean, all_data_sd, start=1, end=2):
 
     if field in ["tp", "cp", "ssr"]:
-            # return mean, sd, 0, 0.  zero fields are so
-            # that each field returns a 4 x ny x nx array.
-            # accumulated fields have been pre-processed
-            # s.t. data[:, j, :, :] has accumulation between times j and j+1
-            data1 = all_data_mean[:, start:end, :, :].reshape(
-                -1, all_data_mean.shape[2], all_data_mean.shape[3]
-            )
-            data2 = all_data_sd[:, start:end, :, :].reshape(
-                -1, all_data_sd.shape[2], all_data_sd.shape[3]
-            )
-            data3 = np.zeros(data1.shape)
-            data = np.stack([data1, data2, data3, data3], axis=-1)[:, None, :, :, :]
-            
+        # return mean, sd, 0, 0.  zero fields are so
+        # that each field returns a 4 x ny x nx array.
+        # accumulated fields have been pre-processed
+        # s.t. data[:, j, :, :] has accumulation between times j and j+1
+        data1 = all_data_mean[:, start:end, :, :].reshape(
+            -1, all_data_mean.shape[2], all_data_mean.shape[3]
+        )
+        data2 = all_data_sd[:, start:end, :, :].reshape(
+            -1, all_data_sd.shape[2], all_data_sd.shape[3]
+        )
+        data3 = np.zeros(data1.shape)
+        data = np.stack([data1, data2, data3, data3], axis=-1)[:, None, :, :, :]
+
     else:
         temp_data_mean_start = all_data_mean[:, start:end, :, :].reshape(
             -1, all_data_mean.shape[2], all_data_mean.shape[3]
@@ -158,22 +159,27 @@ def retrieve_vars_ifs(field, all_data_mean, all_data_sd, start=1, end=2):
         )
 
         data = np.stack(
-                [
-                    temp_data_mean_start,
-                    temp_data_sd_start,
-                    temp_data_mean_end,
-                    temp_data_sd_end,
-                ],
-                axis=-1,
-            )[:, None, :, :, :]
-        
+            [
+                temp_data_mean_start,
+                temp_data_sd_start,
+                temp_data_mean_end,
+                temp_data_sd_end,
+            ],
+            axis=-1,
+        )[:, None, :, :, :]
+
     return data
 
 
 def streamline_and_normalise_ifs(
-    field, da, log_prec=True, norm=True, time_idx=None, split_steps=[5, 6, 7, 8, 9],
+    field,
+    da,
+    log_prec=True,
+    norm=True,
+    time_idx=None,
+    split_steps=[5, 6, 7, 8, 9],
 ):
-    '''
+    """
     Streamline IFS date to:
     * Have appropriate valid time from time of forecast initialization
     * If time_idx are provided then we directly select based on that
@@ -197,30 +203,39 @@ def streamline_and_normalise_ifs(
                  default=[5,6,7,8,9]
     time_idx: 1-D array or None
               instead of split-steps if we have a more randomised
-              selection of valid time to operate on for each 
+              selection of valid time to operate on for each
               initialisation time available
 
     Outputs
     -------
 
     xr.DataArray or xr.Dataset of streamline and normalised values
-    
+
     NOTE: We replace the time with the valid time NOT initia
-    
-    '''
+
+    """
 
     all_data_mean = da[f"{field}_mean"].values
     all_data_sd = da[f"{field}_sd"].values
 
     if time_idx is None:
         times = np.hstack(
-            ([time[split_steps[0] : split_steps[-1]] for time in da.fcst_valid_time.values])
+            (
+                [
+                    time[split_steps[0] : split_steps[-1]]
+                    for time in da.fcst_valid_time.values
+                ]
+            )
         )
     else:
-        assert da.fcst_valid_time.values.shape[0]==time_idx.shape[0]
+        assert da.fcst_valid_time.values.shape[0] == time_idx.shape[0]
         times = np.hstack(
-            ([time[[idx_t]] for time, 
-              idx_t in zip(da.fcst_valid_time.values,time_idx)])
+            (
+                [
+                    time[[idx_t]]
+                    for time, idx_t in zip(da.fcst_valid_time.values, time_idx)
+                ]
+            )
         )
 
     data = []
@@ -228,18 +243,25 @@ def streamline_and_normalise_ifs(
     if time_idx is None:
         for start, end in zip(split_steps[:4], split_steps[1:5]):
 
-            data.append(retrieve_vars_ifs(field, all_data_mean, 
-                                          all_data_sd, start=start, end=end))
+            data.append(
+                retrieve_vars_ifs(
+                    field, all_data_mean, all_data_sd, start=start, end=end
+                )
+            )
     else:
-        
-        for i_row, start in enumerate(time_idx):
-            
-            data.append(retrieve_vars_ifs(field, all_data_mean[[i_row]], 
-                                          all_data_sd[[i_row]], 
-                                           start=start, end=start+1))
 
-        
-        
+        for i_row, start in enumerate(time_idx):
+
+            data.append(
+                retrieve_vars_ifs(
+                    field,
+                    all_data_mean[[i_row]],
+                    all_data_sd[[i_row]],
+                    start=start,
+                    end=start + 1,
+                )
+            )
+
     data = np.hstack((data)).reshape(-1, da.latitude.shape[0], da.longitude.shape[0], 4)
 
     da = xr.DataArray(
@@ -276,28 +298,31 @@ def streamline_and_normalise_ifs(
 
     return da.where(np.isfinite(da), 0).sortby("time")
 
-def get_IMERG_year(years, months=[3,4,5,6]):
 
-    year_beg, year_end, month_beg, month_end = prepare_year_and_month_input(years, months)
+def get_IMERG_year(years, months=[3, 4, 5, 6]):
+
+    year_beg, year_end, month_beg, month_end = prepare_year_and_month_input(
+        years, months
+    )
 
     latitude, longitude = get_IMERG_lonlat()
 
     # Load the IMERG data averaged over 6h periods
-    d = datetime(year_beg,month_beg,1,6)
-    d_end = datetime(year_end,month_end,1,6)
+    d = datetime(year_beg, month_beg, 1, 6)
+    d_end = datetime(year_end, month_end, 1, 6)
     # Number of 30 minutes rainfall periods
-    num_time_pts = (d_end - d).days*48
+    num_time_pts = (d_end - d).days * 48
 
     # The 6h average rainfall
-    rain_IMERG = np.full([num_time_pts, len(longitude), len(latitude)],np.nan)
+    rain_IMERG = np.full([num_time_pts, len(longitude), len(latitude)], np.nan)
 
     start_time = time.time()
 
     time_idx = 0
-    progbar = Progbar(int((d_end-d).days)*2*24)
-    while (d<d_end):
+    progbar = Progbar(int((d_end - d).days) * 2 * 24)
+    while d < d_end:
 
-        if d.month not in np.arange(month_beg,month_end):
+        if d.month not in np.arange(month_beg, month_end):
             progbar.add(1)
             # Move to the next timesetp
             d += timedelta(minutes=30)
@@ -305,22 +330,27 @@ def get_IMERG_year(years, months=[3,4,5,6]):
             continue
 
         # Load an IMERG file with the current date
-        d2 = d + timedelta(seconds=30*60-1)
+        d2 = d + timedelta(seconds=30 * 60 - 1)
         # Number of minutes since 00:00
         count = int((d - datetime(d.year, d.month, d.day)).seconds / 60)
-        IMERG_file_name = TRUTH_PATH+"/%s/%s/"%(str(d.year),str(d.strftime('%b')))+\
-        f"3B-HHR.MS.MRG.3IMERG.{d.year}{d.month:02d}{d.day:02d}-S{d.hour:02d}{d.minute:02d}00-"+\
-        f"E{d2.hour:02d}{d2.minute:02d}{d2.second:02d}.{count:04d}.V07B.HDF5"
+        IMERG_file_name = (
+            TRUTH_PATH
+            + "/%s/%s/" % (str(d.year), str(d.strftime("%b")))
+            + f"3B-HHR.MS.MRG.3IMERG.{d.year}{d.month:02d}{d.day:02d}-S{d.hour:02d}{d.minute:02d}00-"
+            + f"E{d2.hour:02d}{d2.minute:02d}{d2.second:02d}.{count:04d}.V07B.HDF5"
+        )
 
         h5_file = h5py.File(IMERG_file_name)
-        times = h5_file['Grid']["time"][:]
+        times = h5_file["Grid"]["time"][:]
 
         # Check the time is correct
-        #if (d != datetime(1970,1,1) + timedelta(seconds=int(times[0]))):
+        # if (d != datetime(1970,1,1) + timedelta(seconds=int(times[0]))):
         #    print(f"Incorrect time for {d}", datetime(1970,1,1) + timedelta(seconds=int(times[0])))
 
         # Accumulate the rainfall
-        rain_IMERG[time_idx,:,:] = h5_file['Grid']["precipitation"][0,1991:2343,763:1147]
+        rain_IMERG[time_idx, :, :] = h5_file["Grid"]["precipitation"][
+            0, 1991:2343, 763:1147
+        ]
         h5_file.close()
 
         # Move to the next timesetp
@@ -333,26 +363,29 @@ def get_IMERG_year(years, months=[3,4,5,6]):
     # Put into the same order as the IFS and cGAN data
     rain_IMERG = np.moveaxis(rain_IMERG, [0, 1, 2], [0, 2, 1])
 
-    obs = xr.DataArray(data=rain_IMERG.reshape(-1,len(latitude), len(longitude)),
-                         dims=['time','latitude','longitude'],
-                         coords = {
-                             'time':np.arange(
-                                    "%s-%s-01"%(str(year_beg), str(month_beg).zfill(2)),
-                                    "%s-%s-01"%(str(year_end), str(month_end).zfill(2)),
-                                    np.timedelta64(30, "m"),
-                                    dtype="datetime64[ns]"),
-                             'latitude':latitude,
-                             'longitude':longitude,
-                         },
-                          attrs=dict(
-                          description="IMERG 30 min precipitation",
-                          units="mm"))
+    obs = xr.DataArray(
+        data=rain_IMERG.reshape(-1, len(latitude), len(longitude)),
+        dims=["time", "latitude", "longitude"],
+        coords={
+            "time": np.arange(
+                "%s-%s-01" % (str(year_beg), str(month_beg).zfill(2)),
+                "%s-%s-01" % (str(year_end), str(month_end).zfill(2)),
+                np.timedelta64(30, "m"),
+                dtype="datetime64[ns]",
+            ),
+            "latitude": latitude,
+            "longitude": longitude,
+        },
+        attrs=dict(description="IMERG 30 min precipitation", units="mm"),
+    )
 
-    print('Finished loading in IMERG data in ----%.2f s-----'%(time.time()-start_time))
+    print(
+        "Finished loading in IMERG data in ----%.2f s-----" % (time.time() - start_time)
+    )
+
+    return obs.dropna("time", how="all")
 
 
-    return obs.dropna('time', how='all')
-    
 def load_truth_and_mask(dates, time_idx=[5, 6, 7, 8], log_precip=True, normalise=True):
     """
     Returns a single (truth, mask) item of data.
