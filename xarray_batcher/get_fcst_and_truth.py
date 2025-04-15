@@ -358,8 +358,8 @@ def get_all(
     This is recommended if an npz file is being created for
     example.
     * stream IFS data in which case truth_batch should be given
-    and the time_idx to obtain the initialisation time from
-    truth batch valid time is taken form 'time_idx' (See
+    and offset is used to obtain the initialisation time from
+    truth batch valid time (See
     match_fcst_to_valid_time in utils.py
     * Obtain only truth data (when model="truth")
 
