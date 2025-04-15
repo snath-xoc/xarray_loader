@@ -5,89 +5,8 @@ import numpy as np
 from tqdm.dask import TqdmCallback
 from tqdm import tqdm
 from scipy.spatial import KDTree
+from .batch_helper_functions import Antialiasing, get_spherical
 
-import concurrent.futures
-import multiprocessing
-from scipy.ndimage import convolve
-
-class Antialiasing:
-    def __init__(self):
-        (x,y) = np.mgrid[-2:3,-2:3]
-        self.kernel = np.exp(-0.5*(x**2+y**2)/(0.5**2))
-        self.kernel /= self.kernel.sum()
-        self.edge_factors = {}
-        self.img_smooth = {}
-        num_threads = multiprocessing.cpu_count()
-        self.executor = concurrent.futures.ThreadPoolExecutor(num_threads)
-
-    def __call__(self, img):
-        if img.ndim<3:
-            img = img[None,None,:,:]
-        elif img.ndim<4:
-            img = img[None,:,:,:]
-        img_shape = img.shape[-2:]
-        if img_shape not in self.edge_factors:
-            s = convolve(np.ones(img_shape, dtype=np.float32),
-                self.kernel, mode="constant")
-            s = 1.0/s
-            self.edge_factors[img_shape] = s
-        else:
-            s = self.edge_factors[img_shape]
-        
-        if img.shape not in self.img_smooth:
-            img_smooth = np.empty_like(img)
-            self.img_smooth[img_shape] = img_smooth
-        else:
-            img_smooth = self.img_smooth[img_shape]
-
-        def _convolve_frame(i,j):
-            convolve(img[i,j,:,:], self.kernel, 
-                mode="constant", output=img_smooth[i,j,:,:])
-            img_smooth[i,j,:,:] *= s
-
-        futures = []
-        for i in range(img.shape[0]):
-            for j in range(img.shape[1]):
-                args = (_convolve_frame, i, j)
-                futures.append(self.executor.submit(*args))
-        concurrent.futures.wait(futures)
-
-        return img_smooth
-
-
-def get_spherical(lat,lon, elev):
-
-    """
-    Get spherical coordinates of lat and lon, not assuming unit ball for radius
-    So we also take elev into account
-
-    Inputs
-    ------
-
-    lat: np.array or xr.DataArray (n_lats,n_lons)
-         meshgrid of latitude points
-
-    lon: np.array or xr.DataArray (n_lats,n_lons)
-         meshgrid of longitude points
-
-    elev: np.array or xr.DataArray (n_lats,n_lons)
-          altitude values in m
-
-    Output
-    ------
-
-    r, sigma and phi
-    See: https://en.wikipedia.org/wiki/Spherical_coordinate_system
-    for more details
-    """
-    
-    lat, lon = np.deg2rad(lat), np.deg2rad(lon)
-
-    x = elev * np.cos(lat) * np.cos(lon)
-    y = elev * np.cos(lat) * np.sin(lon)
-    z = elev * np.sin(lat)
-    
-    return np.hstack((x.reshape(-1,1),y.reshape(-1,1),z.reshape(-1,1)))
 
 class BatchDataset(torch.utils.data.Dataset):
 
@@ -146,14 +65,9 @@ class BatchDataset(torch.utils.data.Dataset):
 
         X_batch = []
         for x,variable in zip(self.X_generator,self.variables):
-            #try:
             X_batch.append(x[variable].sel({"time":time_batch,
                                           "lat":lat_batch,
                                          "lon":lon_batch}).values)
-            #except:
-            #    print(variable,time_batch)
-            #    X_batch.append(np.zeros([len(time_batch),len(lat_batch),len(lon_batch),4]))    
-            
 
         X_batch = torch.tensor(
             np.concatenate(X_batch, axis=-1,
@@ -248,11 +162,6 @@ class BatchTruth(torch.utils.data.Dataset):
                                  for t in np.unique(np.round(y_train,decimals=1))
                                 ]
             )
-            #class_sample_count = np.array(
-            #                    [len(np.where(np.searchsorted([25,40,50,60],y_train) == t)[0])\
-            #                     for t in np.unique(np.searchsorted([25,40,50,60],y_train))
-            #                    ]
-            #)
             weight = 1. / class_sample_count
             samples_weight = np.zeros_like(y_train)
             for i_t,t in \
