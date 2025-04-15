@@ -4,60 +4,8 @@ import datetime
 import numpy as np
 import pickle
 
-## Put all forecast fields, their levels (can be None also), and specify categories of accumulated and nonnegative fields
-
-all_fcst_fields = {
-    "Convective available potential energy":"cape",
-    "Convective precipitation (water)":"acpcp",#    "Medium cloud cover",
-    "Surface pressure":"sp",
-    "Surface upward short-wave radiation flux":"suswrf",
-    "Surface downward short-wave radiation flux":"sdswrf",
-    "2 metre temperature":"t2m",
-    "Cloud water":"cwat",
-    "Precipitable water":"pwat",
-    "Ice water mixing ratio":"icmr",
-    "Cloud mixing ratio":"clwmr",
-    "Rain mixing ratio":"rwmr",
-    "Total Precipitation":"tp",
-    "U component of wind":"u",
-    "V component of wind":"v",
-}
-
-all_fcst_levels = {
-    "Convective available potential energy": "surface",
-    "Convective precipitation (water)": "surface",
-    "Medium cloud cover": "middleCloudLayer",
-    "Surface pressure": "surface",
-    "Surface upward short-wave radiation flux": "surface",
-    "Surface downward short-wave radiation flux": "surface",
-    "2 metre temperature": "heightAboveGround",
-    "Cloud water": "atmosphereSingleLayer",
-    "Precipitable water": "atmosphereSingleLayer",
-    "Ice water mixing ratio": "isobaricInhPa",
-    "Cloud mixing ratio": "isobaricInhPa",
-    "Rain mixing ratio": "isobaricInhPa",
-    "Total Precipitation": "surface",
-    "U component of wind": "isobaricInhPa",
-    "V component of wind": "isobaricInhPa",
-}
-
-
-accumulated_fields = ["Convective precipitation (water)", "ssr", "Total Precipitation", "cp", "tp"]
-nonnegative_fields = [
-    "Convective available potential energy",
-    "Convective precipitation (water)",
-    "Medium cloud cover",
-    "Surface pressure",
-    "Upward short-wave radiation flux",
-    "Downward short-wave radiation flux",
-    "2 metre temperature",
-    "Cloud water",
-    "Precipitable water",
-    "Ice water mixing ratio",
-    "Cloud mixing ratio",
-    "Rain mixing ratio",
-    "Total Precipitation",
-]
+## Put all forecast fields, their levels (can be None also), and specify categories of accumulated fields
+accumulated_fields = ["ssr", "cp", "tp"]
 
 
 ## Put other user-specification i.e., lon-lat box, spatial and temporal resolution (in hours)
@@ -70,20 +18,13 @@ FCST_TIME_RES = 3
 ## Put all directories here
 
 TRUTH_PATH = (
-    "/home/n/nath/cGAN/shruti/xarray_batcher/example_datasets/"
+   "/network/group/aopp/predict/TIP021_MCRAECOOPER_IFS/IMERG_V07/ICPAC_region/6h/"
 )
-FCST_PATH = ""
-FCST_PATH_IFS = ""
+FCST_PATH_IFS = "/network/group/aopp/predict/TIP021_MCRAECOOPER_IFS/IFS-regICPAC-meansd/"
 
-CONSTANTS_PATH = "/home/n/nath/cGAN/shruti/xarray_batcher/example_datasets/constants-regICPAC/"
+CONSTANTS_PATH = "/network/group/aopp/predict/TIP022_NATH_GFSAIMOD/cGAN/constants-regICPAC/"
 
 TFRECORDS_PATH = ""
-
-
-def get_config():
-
-    return all_fcst_fields, all_fcst_levels, accumulated_fields, nonnegative_fields
-
 
 def get_metadata():
 
@@ -96,16 +37,13 @@ def get_metadata():
 
 def get_paths():
 
-    return FCST_PATH, FCST_PATH_IFS, TRUTH_PATH, CONSTANTS_PATH, TFRECORDS_PATH
+    return FCST_PATH_IFS, TRUTH_PATH, CONSTANTS_PATH, TFRECORDS_PATH
 
 import pickle
 
-def load_fcst_norm(year=2021, model="gfs"):
+def load_fcst_norm(year=2018):
 
-    if model == "gfs":
-        fcstnorm_path = os.path.join(CONSTANTS_PATH, f"FCSTNorm{year}.pkl")
-    elif model == "ifs":
-         fcstnorm_path = os.path.join(CONSTANTS_PATH.replace('-regICPAC','_IFS'), f"FCSTNorm{year}.pkl")
+    fcstnorm_path = os.path.join(CONSTANTS_PATH.replace('-regICPAC','_IFS'), f"FCSTNorm{year}.pkl")
         
     with open(fcstnorm_path, 'rb') as f:
         return pickle.load(f)
@@ -125,6 +63,7 @@ def get_valid_dates(
     TIME_RES=TIME_RES,
     start_hour=30,
     end_hour=60,
+    raw_list=False,
     
 ):
 
@@ -135,7 +74,7 @@ def get_valid_dates(
     as a list of YYYYMMDD strings.
 
     Parameters:
-        year (int): forecasts starting in this year
+        year (list): forecasts starting in this year
         start_hour (int): Lead time of first forecast desired
         end_hour (int): Lead time of last forecast desired
     """
@@ -172,4 +111,45 @@ def get_valid_dates(
         if valid:
             valid_dates.append(curdate)
 
+    if raw_list:
+        # Need to get it from datetime to numpy readable format
+        valid_dates = [date.strftime("%Y-%m-%d") for date in valid_dates]
+    
     return valid_dates
+
+def match_fcst_to_valid_time(valid_times, time_idx, step_type='h'):
+
+    '''
+    Inputs
+    ------
+    valid_times: ndarray or datetime64 object
+                 array of dates as data type datetime64[ns]
+    TIME_RES: integer
+              hourly timesteps which the fcst. is in
+              default = 6
+    time_idx: int
+              array of prediction timedelta of same shape
+              as valid_dates, should be in hours, 
+              data type = int.
+    step_type: str
+                 type of fcst step e.g., D for day
+                 default: 'h' for hour
+    
+    Outputs
+    -------
+    fcst_dates: ndarray
+                i.e., valid_dates-time_idx 
+    valid_date_idx: ndarray
+                    to select
+    '''
+        
+    time_offset = np.timedelta64(time_idx,step_type)
+    fcst_times = valid_times-time_offset
+
+    valid_date_idx = np.asarray([int(time_offset.astype(int)/TIME_RES)])
+
+    return fcst_times, valid_date_idx
+
+    
+    
+    
