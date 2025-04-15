@@ -5,7 +5,7 @@ from torchvision import transforms
 from torch.utils.data import DataLoader
 import sys
 
-from .get_fcst_and_truth import get_IMERG_year
+from .loading import get_IMERG_year
 from .torch_batcher import BatchTruth
 from .custom_collate_fn import CustomCollateFnGen
 

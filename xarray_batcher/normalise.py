@@ -2,19 +2,14 @@
 ## not too many function comments as I feel like they are self-explanatory
 
 import numpy as np
-from .utils import get_config, load_fcst_norm, get_metadata
+from .utils import load_fcst_norm, get_metadata
 
 
 
 ## Unfortunately need to have this look up table, not sure what a work around is
 precip_fields = ["Convective precipitation (water)", "Total Precipitation", "cp", "tp"]
 
-(
-    _,
-    _,
-    accumulated_fields,
-    nonnegative_fields,
-) = get_config()
+accumulated_fields = ['ssr']
 
 ## Normalisation to apply !!! make sure a field doesn't appear twice!!!
 standard_scaling = ["Surface pressure", "2 metre temperature","sp","t2m"]
@@ -37,7 +32,7 @@ maximum_scaling = [
 ]
 absminimum_maximum_scaling = ["U component of wind", "V component of wind","u700", "v700"]
 
-#fcst_norm = load_fcst_norm(model="ifs", year=2018)
+fcst_norm = load_fcst_norm()
 ## get some standard stuff from utils
 fcst_time_res, time_res, lonlatbox, fcst_spat_res = get_metadata()
 
