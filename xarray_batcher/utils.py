@@ -13,7 +13,7 @@ accumulated_fields = ["ssr", "cp", "tp"]
 TIME_RES = 6
 
 LONLATBOX = [-14, 19, 25.25, 54.75]
-FCST_SPAT_RES = 0.25
+FCST_SPAT_RES = 0.1
 FCST_TIME_RES = 3
 
 ## Put all directories here

@@ -358,9 +358,9 @@ def get_all(
     This is recommended if an npz file is being created for
     example.
     * stream IFS data in which case truth_batch should be given
-    and offset is used to obtain the initialisation time from
-    truth batch valid time (See
-    match_fcst_to_valid_time in utils.py
+    and offset is the no. days lead time used to obtain the
+    initialisation time from truth batch valid time (See
+    stream_ifs for further details)
     * Obtain only truth data (when model="truth")
 
     Inputs
