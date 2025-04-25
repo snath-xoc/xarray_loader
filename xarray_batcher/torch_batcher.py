@@ -20,13 +20,12 @@ class BatchDataset(torch.utils.data.Dataset):
         X,
         y,
         constants,
-        batch_size=[4, 128, 128],
-        weighted_sampler=True,
-        for_NJ=False,
-        for_val=False,
-        antialiasing=False,
+        batch_size: List[int] = [4, 128, 128],
+        weighted_sampler: bool = True,
+        for_NJ: bool = False,
+        for_val: bool = False,
+        antialiasing: bool = False,
     ):
-
         self.batch_size = batch_size
         self.X_generator = X
         self.y_generator = xbatcher.BatchGenerator(
@@ -55,17 +54,14 @@ class BatchDataset(torch.utils.data.Dataset):
                 )
                 for i in range(len(self.y_generator))
             ]
-            class_sample_count = np.array(
-                [
-                    len(np.where(np.round(y_train, decimals=1) == t)[0])
-                    for t in np.unique(np.round(y_train, decimals=1))
-                ]
+
+            rounded_y_train = np.round(y_train, decimals=1)
+            unique_values = np.unique(rounded_y_train)
+            class_sample_count = np.bincount(
+                np.digitize(rounded_y_train, unique_classes) - 1
             )
             weight = 1.0 / class_sample_count
-            samples_weight = np.zeros_like(y_train)
-            for i_t, t in enumerate(np.unique(np.round(y_train, decimals=1))):
-                idx = np.squeeze(np.argwhere(np.round(y_train, decimals=1) == t))
-                samples_weight[idx] = weight[i_t]
+            samples_weight = weight[np.digitize(rounded_y_train, unique_classes) - 1]
 
             self.samples_weight = torch.from_numpy(np.asarray(samples_weight))
             self.sampler = torch.utils.data.WeightedRandomSampler(
@@ -90,15 +86,13 @@ class BatchDataset(torch.utils.data.Dataset):
                 .values
             )
 
-        X_batch = torch.tensor(
+        X_batch = torch.from_numpy(
             np.concatenate(
                 X_batch,
                 axis=-1,
-            ),
-            dtype=torch.float32,
-        )
+            )).float()
 
-        constant_batch = torch.tensor(
+        constant_batch = torch.from_numpy(
             np.stack(
                 [
                     self.constants_generator[constant]
@@ -107,9 +101,7 @@ class BatchDataset(torch.utils.data.Dataset):
                     for constant in self.constants
                 ],
                 axis=-1,
-            ),
-            dtype=torch.float32,
-        )
+            )).float()
 
         if self.for_NJ:
 
@@ -137,12 +129,10 @@ class BatchDataset(torch.utils.data.Dataset):
 
             rainfall_path = torch.cat(
                 (
-                    torch.tensor(
+                    torch.from_numpy(
                         y_batch.precipitation.fillna(0).values.reshape(
                             self.batch_size[0], -1, 1
-                        ),
-                        dtype=torch.float32,
-                    ),
+                        )).float(),
                     X_batch.reshape(self.batch_size[0], -1, len(self.variables) * 4),
                 ),
                 dim=-1,
@@ -170,13 +160,11 @@ class BatchDataset(torch.utils.data.Dataset):
                 antialiaser = Antialiasing()
                 y_batch = y_batch.precipitation.fillna(np.log10(0.02)).values
                 y_batch = antialiaser(y_batch)
-                y_batch = torch.tensor(np.moveaxis(y_batch, 0, -1), dtype=torch.float32)
+                y_batch = torch.from_numpy(np.moveaxis(y_batch, 0, -1)).float()
 
             else:
-                y_batch = torch.tensor(
-                    y_batch.precipitation.fillna(np.log10(0.02)).values[:, :, :, None],
-                    dtype=torch.float32,
-                )
+                y_batch = torch.from_numpy(
+                    y_batch.precipitation.fillna(np.log10(0.02)).values[:, :, :, None]).float()
             return (torch.cat((X_batch, constant_batch), dim=-1), y_batch)
 
 
@@ -206,24 +194,16 @@ class BatchTruth(torch.utils.data.Dataset):
         self.antialiasing = antialiasing
         self.transform = transform
         self.return_dataset = return_dataset
-
-        if for_NJ:
-            self.y_generator = xbatcher.BatchGenerator(
+        overlap = (
+            {"latitude": int(batch_size[1] - 8), "longitude": int(batch_size[2] - 8)}
+            if for_NJ
+            else {"lat": int(batch_size[1] // 8), "lon": int(batch_size[2] // 8)}
+        )
+        self.y_generator = xbatcher.BatchGenerator(
                 y,
-                {"latitude": batch_size[1], "longitude": batch_size[2]},
-                input_overlap={
-                    "latitude": int(batch_size[1] - 8),
-                    "longitude": int(batch_size[2] - 8),
-                },
-            )
-        else:
-            self.y_generator = xbatcher.BatchGenerator(
-                y,
-                {"time": batch_size[0], "lat": batch_size[1], "lon": batch_size[2]},
-                input_overlap={
-                    "lat": int(batch_size[1] // 8),
-                    "lon": int(batch_size[2] // 8),
-                },
+                {"time": batch_size[0],
+                "latitude" if for_NJ else "lat": batch_size[1], "longitude" if for_NJ else "lon": batch_size[2]},
+                input_overlap=overlap,
             )
 
         if weighted_sampler:
@@ -241,17 +221,13 @@ class BatchTruth(torch.utils.data.Dataset):
                     )
                     for i in range(len(self.y_generator))
                 ]
-            class_sample_count = np.array(
-                [
-                    len(np.where(np.round(y_train, decimals=1) == t)[0])
-                    for t in np.unique(np.round(y_train, decimals=1))
-                ]
+            rounded_y_train = np.round(y_train, decimals=1)
+            unique_values = np.unique(rounded_y_train)
+            class_sample_count = np.bincount(
+                np.digitize(rounded_y_train, unique_classes) - 1
             )
             weight = 1.0 / class_sample_count
-            samples_weight = np.zeros_like(y_train)
-            for i_t, t in enumerate(np.unique(np.round(y_train, decimals=1))):
-                idx = np.squeeze(np.argwhere(np.round(y_train, decimals=1) == t))
-                samples_weight[idx] = weight[i_t]
+            samples_weight = weight[np.digitize(rounded_y_train, unique_classes) - 1]
 
             self.samples_weight = torch.from_numpy(np.asarray(samples_weight))
             self.sampler = torch.utils.data.WeightedRandomSampler(
