@@ -1,6 +1,8 @@
 import datetime
 import glob
+import time
 
+import h5py
 import numpy as np
 import xarray as xr
 from tqdm import tqdm
@@ -85,7 +87,7 @@ def get_lonlat():
 def get_IMERG_lonlat():
 
     # A single IMERG data file to get latitude and longitude
-    IMERG_file_name = "../example_datasets/3B-HHR.MS.MRG.3IMERG.20180116-S120000-E122959.0720.V07B.HDF5"
+    IMERG_file_name = "/network/group/aopp/predict/TIP021_MCRAECOOPER_IFS/IMERG_V07/2018/Jan/3B-HHR.MS.MRG.3IMERG.20180116-S120000-E122959.0720.V07B.HDF5"
 
     # HDF5 in the ICPAC region
     h5_file = h5py.File(IMERG_file_name)
@@ -299,7 +301,13 @@ def streamline_and_normalise_ifs(
     return da.where(np.isfinite(da), 0).sortby("time")
 
 
-def get_IMERG_year(years, months=[3, 4, 5, 6]):
+def get_IMERG_year(
+    years,
+    months=[3, 4, 5, 6],
+    centre=[-1.25, 36.80],
+    window_size=30,
+    clip_to_window=False,
+):
 
     year_beg, year_end, month_beg, month_end = prepare_year_and_month_input(
         years, months
@@ -308,8 +316,24 @@ def get_IMERG_year(years, months=[3, 4, 5, 6]):
     latitude, longitude = get_IMERG_lonlat()
 
     # Load the IMERG data averaged over 6h periods
-    d = datetime(year_beg, month_beg, 1, 6)
-    d_end = datetime(year_end, month_end, 1, 6)
+    d = datetime.datetime(year_beg, month_beg, 1, 6)
+
+    if year_end != year_beg:
+        d_end = datetime.datetime(year_end, 1, 1, 6)
+        times_xr = np.arange(
+            "%s-%s-01" % (str(year_beg), str(month_beg).zfill(2)),
+            "%s-%s-01" % (str(year_end), str(1).zfill(2)),
+            np.timedelta64(30, "m"),
+            dtype="datetime64[ns]",
+        )
+    else:
+        d_end = datetime.datetime(year_end, month_end, 1, 6)
+        times_xr = np.arange(
+            "%s-%s-01" % (str(year_beg), str(month_beg).zfill(2)),
+            "%s-%s-01" % (str(year_end), str(month_end).zfill(2)),
+            np.timedelta64(30, "m"),
+            dtype="datetime64[ns]",
+        )
     # Number of 30 minutes rainfall periods
     num_time_pts = (d_end - d).days * 48
 
@@ -319,22 +343,22 @@ def get_IMERG_year(years, months=[3, 4, 5, 6]):
     start_time = time.time()
 
     time_idx = 0
-    progbar = Progbar(int((d_end - d).days) * 2 * 24)
+    progbar = tqdm(total=int((d_end - d).days) * 2 * 24)
     while d < d_end:
 
         if d.month not in np.arange(month_beg, month_end):
-            progbar.add(1)
+            progbar.update(1)
             # Move to the next timesetp
-            d += timedelta(minutes=30)
+            d += datetime.timedelta(minutes=30)
             time_idx += 1
             continue
 
         # Load an IMERG file with the current date
-        d2 = d + timedelta(seconds=30 * 60 - 1)
+        d2 = d + datetime.timedelta(seconds=30 * 60 - 1)
         # Number of minutes since 00:00
-        count = int((d - datetime(d.year, d.month, d.day)).seconds / 60)
+        count = int((d - datetime.datetime(d.year, d.month, d.day)).seconds / 60)
         IMERG_file_name = (
-            TRUTH_PATH
+            "/network/group/aopp/predict/TIP021_MCRAECOOPER_IFS/IMERG_V07"
             + "/%s/%s/" % (str(d.year), str(d.strftime("%b")))
             + f"3B-HHR.MS.MRG.3IMERG.{d.year}{d.month:02d}{d.day:02d}-S{d.hour:02d}{d.minute:02d}00-"
             + f"E{d2.hour:02d}{d2.minute:02d}{d2.second:02d}.{count:04d}.V07B.HDF5"
@@ -354,31 +378,34 @@ def get_IMERG_year(years, months=[3, 4, 5, 6]):
         h5_file.close()
 
         # Move to the next timesetp
-        d += timedelta(minutes=30)
+        d += datetime.timedelta(minutes=30)
 
         # Move to the next time index
         time_idx += 1
-        progbar.add(1)
+        progbar.update(1)
+
+    progbar.close()
 
     # Put into the same order as the IFS and cGAN data
     rain_IMERG = np.moveaxis(rain_IMERG, [0, 1, 2], [0, 2, 1])
 
     obs = xr.DataArray(
         data=rain_IMERG.reshape(-1, len(latitude), len(longitude)),
-        dims=["time", "latitude", "longitude"],
+        dims=["time", "lat", "lon"],
         coords={
-            "time": np.arange(
-                "%s-%s-01" % (str(year_beg), str(month_beg).zfill(2)),
-                "%s-%s-01" % (str(year_end), str(month_end).zfill(2)),
-                np.timedelta64(30, "m"),
-                dtype="datetime64[ns]",
-            ),
-            "latitude": latitude,
-            "longitude": longitude,
+            "time": times_xr,
+            "lat": latitude,
+            "lon": longitude,
         },
         attrs=dict(description="IMERG 30 min precipitation", units="mm"),
-    )
-
+    ).rename("precipitation")
+    if clip_to_window:
+        obs = obs.sel(
+            {
+                "lat": slice(centre[0] - window_size, centre[0] + window_size),
+                "lon": slice(centre[1] - window_size, centre[1] + window_size),
+            }
+        )
     print(
         "Finished loading in IMERG data in ----%.2f s-----" % (time.time() - start_time)
     )

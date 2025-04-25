@@ -26,6 +26,7 @@ def open_mfzarr(
     dates=None,
     time_idx=None,
     split_steps=[5, 6, 7, 8, 9],
+    clip_to_window=True,
 ):
     """
     Open multiple files using dask delayed
@@ -60,6 +61,7 @@ def open_mfzarr(
             dates=dates,
             time_idx=time_idx,
             split_steps=split_steps,
+            clip_to_window=clip_to_window,
         )
         for task in open_tasks
     ]
@@ -84,6 +86,7 @@ def modify(
     dates=None,
     time_idx=None,
     split_steps=[5, 6, 7, 8, 9],
+    clip_to_window=True,
 ):
 
     """
@@ -132,7 +135,7 @@ def modify(
                     "longitude": lon_batch,
                 }
             )
-        else:
+        elif clip_to_window:
 
             ds = ds.sel(time=ds.time.dt.month.isin(months)).sel(
                 {
@@ -210,6 +213,7 @@ def stream_ifs(truth_batch, offset=24, variables=None):
         months=[month],
         dates=fcst_date,
         time_idx=time_idx,
+        clip_to_window=False,
     )
     assert batch_time.astype("datetime64[D]") == np.unique(dates_modified)
     return ds
@@ -220,9 +224,11 @@ def get_whole_year_ifs(
     centre=[-1.25, 36.80],
     window_size=30,
     months=[3, 4, 5, 6],
+    n_days=None,
     split_steps=[5, 6, 7, 8, 9],
     ignore_truth=False,
     variables=None,
+    clip_to_window=True,
 ):
     dates_all = []
 
@@ -244,9 +250,9 @@ def get_whole_year_ifs(
     for dates in dates_year:
         start_time = time.time()
 
-        if len(months) == 12:
+        if len(months) == 12 and n_days is not None:
             dates_sel = np.random.choice(
-                np.array(dates, dtype="datetime64[D]"), 60, replace=False
+                np.array(dates, dtype="datetime64[D]"), n_days, replace=False
             )
         else:
             dates_sel = None
@@ -269,6 +275,7 @@ def get_whole_year_ifs(
             months=months,
             dates=dates_sel,
             split_steps=split_steps,
+            clip_to_window=clip_to_window,
         )
 
         if year == years[0]:
@@ -309,7 +316,11 @@ def get_whole_year_ifs(
         # Because of 6 hour offset when streamlining select dates 6AM to midnight is used
         # Meaning that the next day midnight is in truth but no other time step in that date.
         # Therefore, need to guarantee alignment in times.
-        ds_truth_and_mask = ds_truth_and_mask.sel({"time": ds_vars[0].time.values})
+        ds_truth_and_mask = ds_truth_and_mask.drop_duplicates("time")
+        times_sel = np.intersect1d(
+            ds_vars[0].time.values, ds_truth_and_mask.time.values
+        )
+        ds_truth_and_mask = ds_truth_and_mask.sel({"time": times_sel})
     ds_constants = load_hires_constants(batch_size=1)
 
     print(
@@ -349,6 +360,10 @@ def get_all(
     ignore_truth=False,
     variables=None,
     months=None,
+    n_days=10,
+    centre=[-1.25, 36.80],
+    window_size=30,
+    clip_to_window=False,
 ):
 
     """
@@ -358,9 +373,9 @@ def get_all(
     This is recommended if an npz file is being created for
     example.
     * stream IFS data in which case truth_batch should be given
-    and offset is the no. days lead time used to obtain the
-    initialisation time from truth batch valid time (See
-    stream_ifs for further details)
+    and offset is the no. days (in hours) lead time used to
+    obtain the initialisation time from truth batch valid time
+    (See stream_ifs for further details)
     * Obtain only truth data (when model="truth")
 
     Inputs
@@ -392,6 +407,16 @@ def get_all(
     months: ndarray or list or None
             months to load in in case of seasonal/sub-seasonal
             training, if None all months are used
+     centre: list or tuple
+             centre around which to select a region when looking
+             at sub-domains, only used when clip_to_window is true
+    window_size: integer
+                 window size around centre to use in sub-domain
+                 selection, only used when clip_to_window is true
+    clip_to_window: boolean
+                    passed on to get_whole_year_ifs or simply
+                    getting truth, to signal when to clip to a
+                    window (size window_size) around centre
 
     Outputs:
     -------
@@ -409,6 +434,10 @@ def get_all(
                 ignore_truth=ignore_truth,
                 variables=variables,
                 months=months,
+                n_days=n_days,
+                centre=centre,
+                window_size=window_size,
+                clip_to_window=clip_to_window,
             )
 
         else:
@@ -435,6 +464,16 @@ def get_all(
             "s---- for years",
             years,
         )
+        if clip_to_window:
+            ds_truth_and_mask = ds_truth_and_mask.sel(
+                {
+                    "latitude": slice(centre[0] - window_size, centre[0] + window_size),
+                    "longitude": slice(
+                        centre[1] - window_size, centre[1] + window_size
+                    ),
+                }
+            )
+
         return ds_truth_and_mask.sel(
             time=ds_truth_and_mask.time.dt.month.isin(months)
         ).rename({"latitude": "lat", "longitude": "lon"})
