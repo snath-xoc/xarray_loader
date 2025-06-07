@@ -56,7 +56,7 @@ class BatchDataset(torch.utils.data.Dataset):
             ]
 
             rounded_y_train = np.round(y_train, decimals=1)
-            unique_values = np.unique(rounded_y_train)
+            unique_classes = np.unique(rounded_y_train)
             class_sample_count = np.bincount(
                 np.digitize(rounded_y_train, unique_classes) - 1
             )
@@ -222,7 +222,7 @@ class BatchTruth(torch.utils.data.Dataset):
                     for i in range(len(self.y_generator))
                 ]
             rounded_y_train = np.round(y_train, decimals=1)
-            unique_values = np.unique(rounded_y_train)
+            unique_classes = np.unique(rounded_y_train)
             class_sample_count = np.bincount(
                 np.digitize(rounded_y_train, unique_classes) - 1
             )
