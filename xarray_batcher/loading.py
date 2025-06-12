@@ -444,7 +444,6 @@ def load_truth_and_mask(dates, time_idx=[5, 6, 7, 8], log_precip=True, normalise
             # axis=0)
             # for i,dataset in enumerate(data_path)],dim='time').mean('time')
             ds = xr.open_dataset(data_path[0])
-
             if log_precip:
                 ds["precipitation"] = logprec(ds["precipitation"])
 

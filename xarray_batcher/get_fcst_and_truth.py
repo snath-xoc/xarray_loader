@@ -364,6 +364,7 @@ def get_all(
     centre=[-1.25, 36.80],
     window_size=30,
     clip_to_window=False,
+    log_precip=True,
 ):
 
     """
@@ -417,6 +418,9 @@ def get_all(
                     passed on to get_whole_year_ifs or simply
                     getting truth, to signal when to clip to a
                     window (size window_size) around centre
+    log_precip: boolean
+                passed on to load_truth_and_mask when model is "truth
+                default=True
 
     Outputs:
     -------
@@ -456,6 +460,7 @@ def get_all(
         ds_truth_and_mask = load_truth_and_mask(
             np.array(dates_all, dtype="datetime64[ns]").flatten(),
             time_idx=time_idx,
+            log_precip=log_precip,
         )
 
         print(
