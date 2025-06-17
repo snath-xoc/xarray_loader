@@ -20,7 +20,7 @@ class BatchDataset(torch.utils.data.Dataset):
         X,
         y,
         constants,
-        batch_size: List[int] = [4, 128, 128],
+        batch_size: list[int] = [4, 128, 128],
         weighted_sampler: bool = True,
         for_NJ: bool = False,
         for_val: bool = False,
@@ -90,7 +90,8 @@ class BatchDataset(torch.utils.data.Dataset):
             np.concatenate(
                 X_batch,
                 axis=-1,
-            )).float()
+            )
+        ).float()
 
         constant_batch = torch.from_numpy(
             np.stack(
@@ -101,7 +102,8 @@ class BatchDataset(torch.utils.data.Dataset):
                     for constant in self.constants
                 ],
                 axis=-1,
-            )).float()
+            )
+        ).float()
 
         if self.for_NJ:
 
@@ -132,7 +134,8 @@ class BatchDataset(torch.utils.data.Dataset):
                     torch.from_numpy(
                         y_batch.precipitation.fillna(0).values.reshape(
                             self.batch_size[0], -1, 1
-                        )).float(),
+                        )
+                    ).float(),
                     X_batch.reshape(self.batch_size[0], -1, len(self.variables) * 4),
                 ),
                 dim=-1,
@@ -164,7 +167,8 @@ class BatchDataset(torch.utils.data.Dataset):
 
             else:
                 y_batch = torch.from_numpy(
-                    y_batch.precipitation.fillna(np.log10(0.02)).values[:, :, :, None]).float()
+                    y_batch.precipitation.fillna(np.log10(0.02)).values[:, :, :, None]
+                ).float()
             return (torch.cat((X_batch, constant_batch), dim=-1), y_batch)
 
 
@@ -200,11 +204,14 @@ class BatchTruth(torch.utils.data.Dataset):
             else {"lat": int(batch_size[1] // 8), "lon": int(batch_size[2] // 8)}
         )
         self.y_generator = xbatcher.BatchGenerator(
-                y,
-                {"time": batch_size[0],
-                "latitude" if for_NJ else "lat": batch_size[1], "longitude" if for_NJ else "lon": batch_size[2]},
-                input_overlap=overlap,
-            )
+            y,
+            {
+                "time": batch_size[0],
+                "latitude" if for_NJ else "lat": batch_size[1],
+                "longitude" if for_NJ else "lon": batch_size[2],
+            },
+            input_overlap=overlap,
+        )
 
         if weighted_sampler:
             if self.for_NJ:
