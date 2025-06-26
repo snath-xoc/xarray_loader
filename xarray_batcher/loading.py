@@ -213,7 +213,8 @@ def streamline_and_normalise_ifs(
 
     xr.DataArray or xr.Dataset of streamline and normalised values
 
-    NOTE: We replace the time with the valid time NOT initia
+    NOTE: We replace the time with the valid time NOT initial fcst
+    time.
 
     """
 
@@ -230,6 +231,8 @@ def streamline_and_normalise_ifs(
             )
         )
     else:
+        if time_idx.shape[0] % 4 == 0:
+            time_idx = time_idx.reshape(-1, 4)
         assert da.fcst_valid_time.values.shape[0] == time_idx.shape[0]
         times = np.hstack(
             (
@@ -253,26 +256,36 @@ def streamline_and_normalise_ifs(
     else:
 
         for i_row, start in enumerate(time_idx):
-
-            data.append(
-                retrieve_vars_ifs(
-                    field,
-                    all_data_mean[[i_row]],
-                    all_data_sd[[i_row]],
-                    start=start,
-                    end=start + 1,
+            if isinstance(start, np.ndarray):
+                for s in start:
+                    data.append(
+                        retrieve_vars_ifs(
+                            field,
+                            all_data_mean[[i_row]],
+                            all_data_sd[[i_row]],
+                            start=s,
+                            end=s + 1,
+                        )
+                    )
+            else:
+                data.append(
+                    retrieve_vars_ifs(
+                        field,
+                        all_data_mean[[i_row]],
+                        all_data_sd[[i_row]],
+                        start=start,
+                        end=start + 1,
+                    )
                 )
-            )
 
     data = np.hstack((data)).reshape(-1, da.latitude.shape[0], da.longitude.shape[0], 4)
-
     da = xr.DataArray(
         data=data,
         dims=["time", "lat", "lon", "i_x"],
         coords=dict(
             lon=da.longitude.values,
             lat=da.latitude.values,
-            time=times,
+            time=times.flatten(),
             i_x=np.arange(4),
         ),
     )

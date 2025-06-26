@@ -70,7 +70,10 @@ def open_mfzarr(
     combined = datasets[0]  # or some combination of concat, merge
     dates = []
     for dataset in combined:
-        dates += list(np.unique(dataset.time.values.astype("datetime64[D]")))
+        if time_idx is None:
+            dates += list(np.unique(dataset.time.values.astype("datetime64[D]")))
+        else:
+            dates += list(np.unique(dataset.time.values))
 
     return combined, dates
 
@@ -189,11 +192,11 @@ def stream_ifs(truth_batch, offset=24, variables=None):
 
     # Get hours in the truth_batch times object
     # First need to convert to format with base units of hours to extract hour offset
-    hour = batch_time.astype("datetime64[h]").astype(object)[0].hour
+    hour = [time.hour for time in batch_time.astype("datetime64[h]").astype(object)]
 
     # Note that if hour is 0 then we add 24 as this
     # is the offset+24
-    hour = hour + 24 * (hour == 0) + offset
+    hour = [h + 24 * (h == 0) + offset for h in hour]
 
     fcst_date, time_idx = match_fcst_to_valid_time(batch_time, hour)
 
@@ -215,7 +218,7 @@ def stream_ifs(truth_batch, offset=24, variables=None):
         time_idx=time_idx,
         clip_to_window=False,
     )
-    assert batch_time.astype("datetime64[D]") == np.unique(dates_modified)
+    assert np.all(np.isin(dates_modified, batch_time))
     return ds
 
 

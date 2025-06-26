@@ -38,8 +38,10 @@ def collate_fn(batch, elev=elev, reg_dict={}):
             "elevation": elev_values,
             "spherical_coords": spherical_coords,
             "precipitation": [],
+            "time": [],
         }
     reg_dict[reg_sel]["precipitation"].append(batch.precipitation.values)
+    reg_dict[reg_sel]["time"].append(batch.time.values)
 
     return reg_dict
 
@@ -81,10 +83,12 @@ def TruthDataloader_to_Npz(
         precipitation = np.stack(
             [np.vstack(reg_dict[key]["precipitation"]) for key in reg_dict.keys()]
         )
+        time = np.stack([np.hstack(reg_dict[key]["time"]) for key in reg_dict.keys()])
 
         np.savez(
             out_path + f"{year}_30min_IMERG_Nairobi_windowsize={window_size}.npz",
             spherical_coords=spherical_coords,
             elevation=elevation,
             precipitation=precipitation,
+            time=time,
         )

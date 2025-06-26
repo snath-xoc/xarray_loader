@@ -154,9 +154,15 @@ def match_fcst_to_valid_time(valid_times, time_idx, step_type="h"):
                     to select
     """
 
-    time_offset = np.timedelta64(time_idx, step_type)
-    fcst_times = valid_times - time_offset
+    if not isinstance(time_idx, list):
+        time_offset = np.timedelta64(time_idx, step_type)
+        valid_date_idx = np.asarray([int(time_offset.astype(int) / TIME_RES)])
+    else:
+        time_offset = [np.timedelta64(t_idx, step_type) for t_idx in time_idx]
+        valid_date_idx = np.asarray(
+            [int(t_offset.astype(int) / TIME_RES) for t_offset in time_offset]
+        )
 
-    valid_date_idx = np.asarray([int(time_offset.astype(int) / TIME_RES)])
+    fcst_times = valid_times - time_offset
 
     return fcst_times, valid_date_idx
