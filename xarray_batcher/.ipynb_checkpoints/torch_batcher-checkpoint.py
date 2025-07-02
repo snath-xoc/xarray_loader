@@ -3,40 +3,31 @@ import numpy as np
 import torch
 import xbatcher
 from scipy.spatial import KDTree
-
-from xarray_batcher.get_fcst_and_truth import get_all
+from tqdm import tqdm
+from tqdm.dask import TqdmCallback
 
 from .batch_helper_functions import Antialiasing, get_spherical
 
 
-class StreamDataset(torch.utils.data.IterableDataset):
+class BatchDataset(torch.utils.data.Dataset):
 
     """
-    Similar as BatchDataset, see torch_batcher.py apart
-    from the new workflow to assist in streaming:
-
-    1) Start using only truth data
-    2) Calculate sampler
-    3) When iterating through truth, load in the fcst.
-    data on-the-fly
-
+    class for iterating over a dataset
     """
 
     def __init__(
         self,
+        X,
         y,
-        variables,
         constants,
         batch_size: list[int] = [4, 128, 128],
-        batches_per_epoch=1200,
         weighted_sampler: bool = True,
         for_NJ: bool = False,
         for_val: bool = False,
         antialiasing: bool = False,
     ):
         self.batch_size = batch_size
-        self.batches_per_epoch = batches_per_epoch
-        self.variables = variables
+        self.X_generator = X
         self.y_generator = xbatcher.BatchGenerator(
             y,
             {"time": batch_size[0], "lat": batch_size[1], "lon": batch_size[2]},
@@ -50,6 +41,7 @@ class StreamDataset(torch.utils.data.IterableDataset):
 
         self.constants_generator = constants
 
+        self.variables = [list(x.data_vars)[0] for x in X]
         self.constants = list(constants.data_vars)
         self.for_NJ = for_NJ
         self.for_val = for_val
@@ -63,57 +55,36 @@ class StreamDataset(torch.utils.data.IterableDataset):
                 for i in range(len(self.y_generator))
             ]
 
-            rounded_y_train = np.round(y_train, decimals=0)
+            rounded_y_train = np.round(y_train, decimals=1)
             unique_classes = np.unique(rounded_y_train)
             class_sample_count = np.bincount(
                 np.digitize(rounded_y_train, unique_classes) - 1
             )
             weight = 1.0 / class_sample_count
-            sample_weights = weight[np.digitize(rounded_y_train, unique_classes) - 1]
-            sample_weights = sample_weights / np.sum(sample_weights)
+            samples_weight = weight[np.digitize(rounded_y_train, unique_classes) - 1]
 
-            self.sample_weights = torch.from_numpy(np.asarray(sample_weights))
-        else:
-            self.sample_weights = None
+            self.samples_weight = torch.from_numpy(np.asarray(samples_weight))
+            self.sampler = torch.utils.data.WeightedRandomSampler(
+                self.samples_weight.type("torch.DoubleTensor"), len(samples_weight)
+            )
 
-        self.len = len(self.y_generator)
+    def __len__(self) -> int:
+        return len(self.y_generator)
 
-    def __len__(self):
-        return self.batches_per_epoch
+    def __getitem__(self, idx):
 
-    def __iter__(self):
-        self.idx = 0
-        while self.idx <= self.__len__():
-            try:
-                yield self.__sample__()
-                self.idx += 1
-            except:
-                continue
-
-    def __sample__(self):
-
-        if self.sample_weights is None:
-            idx_samp = np.random.randint(0, self.len)
-        else:
-            idx_samp = int(np.random.choice(self.len, p=self.sample_weights))
-
-        y_batch = self.y_generator[idx_samp]
+        y_batch = self.y_generator[idx]
         time_batch = y_batch.time.values
         lat_batch = np.round(y_batch.lat.values, decimals=2)
         lon_batch = np.round(y_batch.lon.values, decimals=2)
 
-        X_generator = get_all(
-            None,
-            model="ifs",
-            truth_batch=y_batch,
-            stream=True,
-            offset=24,
-            variables=self.variables,
-        )
-
         X_batch = []
-        for x, variable in zip(X_generator, self.variables):
-            X_batch.append(x[variable].values)
+        for x, variable in zip(self.X_generator, self.variables):
+            X_batch.append(
+                x[variable]
+                .sel({"time": time_batch, "lat": lat_batch, "lon": lon_batch})
+                .values
+            )
 
         X_batch = torch.from_numpy(
             np.concatenate(
@@ -201,7 +172,7 @@ class StreamDataset(torch.utils.data.IterableDataset):
             return (torch.cat((X_batch, constant_batch), dim=-1), y_batch)
 
 
-class StreamTruth(torch.utils.data.Dataset):
+class BatchTruth(torch.utils.data.Dataset):
 
     """
     class for iterating over a dataset
