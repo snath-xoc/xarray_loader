@@ -14,19 +14,22 @@ TIME_RES = 6
 
 LONLATBOX = [-14, 19, 25.25, 54.75]
 FCST_SPAT_RES = 0.1
-FCST_TIME_RES = 3
+FCST_TIME_RES = 6
 
 ## Put all directories here
 
 TRUTH_PATH = (
-    "/network/group/aopp/predict/TIP021_MCRAECOOPER_IFS/IMERG_V07/ICPAC_region/6h/"
+    "/network/group/aopp/predict/AWH024_COOPERNATH_IFS/IFS/IMERG_V07/ICPAC_region/24h/"
+    # "/network/group/aopp/predict/TIP021_MCRAECOOPER_IFS/IMERG_V07/ICPAC_region/24h/"
 )
 FCST_PATH_IFS = (
-    "/network/group/aopp/predict/TIP021_MCRAECOOPER_IFS/IFS-regICPAC-meansd/"
+    # "/local/scratch/snath/"
+    "/network/group/aopp/predict/AWH024_COOPERNATH_IFS/cGAN_gefs/zarr/"
+    # "/network/group/aopp/predict/TIP021_MCRAECOOPER_IFS/IFS-regICPAC-meansd/"
 )
 
 CONSTANTS_PATH = (
-    "/network/group/aopp/predict/TIP022_NATH_GFSAIMOD/cGAN/constants-regICPAC/"
+    "/network/group/aopp/predict/AWH026_NATH_GFSAIMOD/cGAN/constants-regICPAC/"
 )
 
 
@@ -88,7 +91,7 @@ def get_valid_dates(
     """
 
     # sanity checks for our dataset
-    assert year in (2018, 2019, 2020, 2021, 2022, 2023, 2024)
+    # assert year in (2018, 2019, 2020, 2021, 2022, 2023, 2024)
     assert start_hour >= 0
     assert start_hour % TIME_RES == 0
     assert end_hour % TIME_RES == 0
@@ -108,9 +111,9 @@ def get_valid_dates(
 
         ## then check for truth data at the desired lead time
         for hr in np.arange(start_hour, end_hour, TIME_RES):
-            datestr_true = curdate + datetime.timedelta(hours=6)
-            datestr_true = datestr_true.strftime("%Y%m%d_%H")
-            fname = f"{datestr_true}"  # {hr:02}
+            datestr_true = curdate + datetime.timedelta(hours=int(hr))
+            datestr_true = datestr_true.strftime("%Y%m%d")
+            fname = f"{datestr_true}_{(hr%24):02}"
 
             if not os.path.exists(
                 os.path.join(TRUTH_PATH, f"{datestr_true[:4]}/{fname}.nc")
@@ -154,9 +157,15 @@ def match_fcst_to_valid_time(valid_times, time_idx, step_type="h"):
                     to select
     """
 
-    time_offset = np.timedelta64(time_idx, step_type)
-    fcst_times = valid_times - time_offset
+    if not isinstance(time_idx, list):
+        time_offset = np.timedelta64(time_idx, step_type)
+        valid_date_idx = np.asarray([int(time_offset.astype(int) / TIME_RES)])
+    else:
+        time_offset = [np.timedelta64(t_idx, step_type) for t_idx in time_idx]
+        valid_date_idx = np.asarray(
+            [int(t_offset.astype(int) / TIME_RES) for t_offset in time_offset]
+        )
 
-    valid_date_idx = np.asarray([int(time_offset.astype(int) / TIME_RES)])
+    fcst_times = valid_times - time_offset
 
     return fcst_times, valid_date_idx

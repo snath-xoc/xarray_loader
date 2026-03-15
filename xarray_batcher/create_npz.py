@@ -37,9 +37,13 @@ def collate_fn(batch, elev=elev, reg_dict={}):
         reg_dict[reg_sel] = {
             "elevation": elev_values,
             "spherical_coords": spherical_coords,
+            "latitude": lat_batch,
+            "longitude": lon_batch,
             "precipitation": [],
+            "time": [],
         }
     reg_dict[reg_sel]["precipitation"].append(batch.precipitation.values)
+    reg_dict[reg_sel]["time"].append(batch.time.values)
 
     return reg_dict
 
@@ -51,6 +55,7 @@ def TruthDataloader_to_Npz(
     months=None,
     window_size=3,
     collate_fn=collate_fn,
+    zarr=True,
 ):
 
     if not os.path.exists(out_path):
@@ -74,17 +79,79 @@ def TruthDataloader_to_Npz(
         for batch in ds:
             reg_dict = collate_fn(batch, elev=elev, reg_dict=reg_dict)
 
-        spherical_coords = np.stack(
-            [reg_dict[key]["spherical_coords"] for key in reg_dict.keys()]
-        )
-        elevation = np.stack([reg_dict[key]["elevation"] for key in reg_dict.keys()])
-        precipitation = np.stack(
-            [np.vstack(reg_dict[key]["precipitation"]) for key in reg_dict.keys()]
-        )
+        if zarr:
+            da = []
+            for key in reg_dict.keys():
+                da.append(
+                    xr.Dataset(
+                        data_vars=dict(
+                            precipitation=(
+                                ["region", "time", "i", "j"],
+                                np.vstack(reg_dict[key]["precipitation"]).astype(
+                                    np.float32
+                                )[None, ...],
+                            ),
+                            spherical_coords=(
+                                ["region", "i", "j", "coord"],
+                                reg_dict[key]["spherical_coords"].astype(np.float32)[
+                                    None, ...
+                                ],
+                            ),
+                            elevation=(
+                                ["region", "i", "j"],
+                                reg_dict[key]["elevation"].astype(np.float32)[
+                                    None, ...
+                                ],
+                            ),
+                        ),
+                        coords={
+                            "region": [key],
+                            "time": np.hstack(reg_dict[key]["time"]),
+                            "i": np.arange(
+                                128
+                            ),  # reg_dict[key]['latitude'].astype(np.float32),
+                            "j": np.arange(
+                                128
+                            ),  # reg_dict[key]['longitude'].astype(np.float32),
+                            "coord": ["x", "y", "z"],
+                        },
+                    )
+                )
 
-        np.savez(
-            out_path + f"{year}_30min_IMERG_Nairobi_windowsize={window_size}.npz",
-            spherical_coords=spherical_coords,
-            elevation=elevation,
-            precipitation=precipitation,
-        )
+            da = xr.concat(da, "region")
+            if os.path.exists(
+                out_path + f"30min_IMERG_Nairobi_windowsize={window_size}.zarr"
+            ):
+                da.to_zarr(
+                    out_path + f"30min_IMERG_Nairobi_windowsize={window_size}.zarr",
+                    mode="a-",
+                    append_dim="time",
+                )
+            else:
+                da.to_zarr(
+                    out_path + f"30min_IMERG_Nairobi_windowsize={window_size}.zarr",
+                    mode="w",
+                )
+
+            del da
+        else:
+            spherical_coords = np.stack(
+                [reg_dict[key]["spherical_coords"] for key in reg_dict.keys()]
+            )
+            elevation = np.stack(
+                [reg_dict[key]["elevation"] for key in reg_dict.keys()]
+            )
+            precipitation = np.stack(
+                [np.vstack(reg_dict[key]["precipitation"]) for key in reg_dict.keys()]
+            )
+            time = np.stack(
+                [np.hstack(reg_dict[key]["time"]) for key in reg_dict.keys()]
+            )
+
+            np.savez(
+                out_path + f"{year}_30min_IMERG_Nairobi_windowsize={window_size}.npz",
+                spherical_coords=spherical_coords,
+                elevation=elevation,
+                precipitation=precipitation,
+                time=time,
+            )
