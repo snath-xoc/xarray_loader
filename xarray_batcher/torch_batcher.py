@@ -10,7 +10,7 @@ from tqdm.dask import TqdmCallback
 from .batch_helper_functions import Antialiasing, get_spherical
 from .normalise import logprec
 
-seeps_dataset = xr.open_dataset("../SEEPS_tests.nc")
+seeps_dataset = xr.open_dataset("./SEEPS_tests.nc")
 
 
 class BatchDataset(torch.utils.data.Dataset):

@@ -15,7 +15,7 @@ from xarray_batcher.get_fcst_and_truth import get_all
 from .batch_helper_functions import Antialiasing, get_spherical
 from .normalise import fcst_norm, logprec
 
-seeps_dataset = xr.open_dataset("../SEEPS_tests.nc")
+seeps_dataset = xr.open_dataset("./SEEPS_tests.nc")
 OUT_PATH = (
     "/network/group/aopp/predict/AWH024_COOPERNATH_IFS/cGAN_gefs/zarr/samples-v2/"
 )
@@ -57,7 +57,6 @@ class StreamDataset(torch.utils.data.IterableDataset):
         self.batch_size = batch_size
         self.batches_per_epoch = batches_per_epoch
         self.variables = variables
-        self.log_to_sqrt = log_to_sqrt
         self.return_seeps = return_seeps
         self.seeps_ds = seeps_dataset
         self.log_precip = log_precip
