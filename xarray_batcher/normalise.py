@@ -1,18 +1,20 @@
 ## Normalisation functions, note to self you can apply universal functions from numpy as scipy that operate element wise on xarray
 ## not too many function comments as I feel like they are self-explanatory
 
+import datetime
+import warnings
+
 import numpy as np
-from .utils import load_fcst_norm, get_metadata
 
-
+from .utils import get_metadata, load_fcst_norm
 
 ## Unfortunately need to have this look up table, not sure what a work around is
 precip_fields = ["Convective precipitation (water)", "Total Precipitation", "cp", "tp"]
 
-accumulated_fields = ['ssr']
+accumulated_fields = ["ssr"]
 
 ## Normalisation to apply !!! make sure a field doesn't appear twice!!!
-standard_scaling = ["Surface pressure", "2 metre temperature","sp","t2m"]
+standard_scaling = ["Surface pressure", "2 metre temperature", "sp", "t2m"]
 maximum_scaling = [
     "Convective available potential energy",
     "Upward short-wave radiation flux",
@@ -23,28 +25,50 @@ maximum_scaling = [
     "Cloud mixing ratio",
     "Rain mixing ratio",
     "cape",
-    "ssr", 
-    "tciw", 
-    "tclw", 
-    "tcrw", 
-    "tcw", 
-    "tcwv", 
+    "ssr",
+    "tcw",
+    "tcwv",
 ]
-absminimum_maximum_scaling = ["U component of wind", "V component of wind","u700", "v700"]
+absminimum_maximum_scaling = [
+    "U component of wind",
+    "V component of wind",
+    "u700",
+    "v700",
+]
 
 fcst_norm = load_fcst_norm()
 ## get some standard stuff from utils
 fcst_time_res, time_res, lonlatbox, fcst_spat_res = get_metadata()
 
 
-def logprec(data, threshold=0.1, fill_value=0.02,mean=0.051, std=0.266):
-    log_scale = np.log10(1e-1+data).astype(np.float32)
+def logprec(
+    data,
+    threshold=0.1,
+    fill_value=0.02,
+    mean=0.051,
+    std=0.266,
+    use_climatology=False,
+    climatology=None,
+    ds=None,
+):
+    if use_climatology:
+        valid_dt = ds.time.values[0].astype("datetime64[h]").astype(object)
+        year_date = datetime.datetime.strptime(f"{valid_dt.year}0101", "%Y%m%d")
+        idx = valid_dt.toordinal() - year_date.toordinal()
+        try:
+            data = data - climatology["IMERG_mean"].isel({"time": idx})
+        except:
+            ## Leap year with 366 days sometimes causes problems so just round it off
+            data = data - climatology["IMERG_mean"].isel({"time": idx - 1})
+
+    log_scale = np.log10(1e-1 + data).astype(np.float32)
     if threshold is not None:
-        log_scale.where(log_scale > np.log10(threshold),np.log10(fill_value))
-    
+        log_scale.where(log_scale > np.log10(threshold), np.log10(fill_value))
+
     log_scale.fillna(np.log10(fill_value))
-    log_scale -= mean
-    log_scale /= std
+    if not use_climatology:
+        log_scale -= mean
+        log_scale /= std
     return log_scale
 
 
@@ -74,23 +98,26 @@ def change_to_unit_std(data, field):
 
 
 def max_scaling(data, field):
-    return (data) / (
-        fcst_norm[field]["max"]
-    )
+    return (data) / (fcst_norm[field]["max"])
 
 
 def absmin_max_scaling(data, field):
     return data / max(-fcst_norm[field]["min"], fcst_norm[field]["max"])
 
 
-def convert_units(data, field, log_prec, m_to_mm=True):
+def convert_units(data, field, log_prec, sqrt_prec, m_to_mm=True):
     if field in precip_fields:
 
         if m_to_mm:
             data = m_to_mm_per_hour(data, time_res)
 
         if log_prec:
+            if sqrt_prec:
+                warnings.warn("sqrt_prec ignored when log_prec is True", UserWarning)
             return logprec(data)
+
+        elif sqrt_prec:
+            return np.sqrt(data)
 
         else:
             return data
@@ -104,13 +131,18 @@ def convert_units(data, field, log_prec, m_to_mm=True):
         return data
 
 
-def get_norm(data, field, location_of_vals=[0,2]):
-    
+def get_norm(data, field, location_of_vals=[0, 2]):
+
     if field in precip_fields:
         return data
 
+    if field in ["tciw", "tclw", "tcrw"]:
+        return np.sqrt(data)
+
     if field in standard_scaling:
-        data.loc[{"i_x": location_of_vals}] = centre_at_mean(data.sel({"i_x": location_of_vals}), field)
+        data.loc[{"i_x": location_of_vals}] = centre_at_mean(
+            data.sel({"i_x": location_of_vals}), field
+        )
 
         return change_to_unit_std(data, field)
 

@@ -1,12 +1,16 @@
 import dask
 import numpy as np
 import torch
+import xarray as xr
 import xbatcher
 from scipy.spatial import KDTree
 from tqdm import tqdm
 from tqdm.dask import TqdmCallback
 
 from .batch_helper_functions import Antialiasing, get_spherical
+from .normalise import logprec
+
+seeps_dataset = xr.open_dataset("../SEEPS_tests.nc")
 
 
 class BatchDataset(torch.utils.data.Dataset):
@@ -25,6 +29,8 @@ class BatchDataset(torch.utils.data.Dataset):
         for_NJ: bool = False,
         for_val: bool = False,
         antialiasing: bool = False,
+        return_seeps: bool = False,
+        fill_value: float = np.log10(0.02),
     ):
         self.batch_size = batch_size
         self.X_generator = X
@@ -46,6 +52,11 @@ class BatchDataset(torch.utils.data.Dataset):
         self.for_NJ = for_NJ
         self.for_val = for_val
         self.antialiasing = antialiasing
+        self.return_seeps = return_seeps
+        self.seeps_ds = seeps_dataset
+        self.seeps_ds["latitude"] = np.round(y.lat.values, decimals=2)
+        self.seeps_ds["longitude"] = np.round(y.lon.values, decimals=2)
+        self.fill_value = fill_value
 
         if weighted_sampler:
             y_train = [
@@ -75,6 +86,7 @@ class BatchDataset(torch.utils.data.Dataset):
 
         y_batch = self.y_generator[idx]
         time_batch = y_batch.time.values
+        month_batch = y_batch.time.dt.month.values
         lat_batch = np.round(y_batch.lat.values, decimals=2)
         lon_batch = np.round(y_batch.lon.values, decimals=2)
 
@@ -161,15 +173,34 @@ class BatchDataset(torch.utils.data.Dataset):
 
             if self.antialiasing:
                 antialiaser = Antialiasing()
-                y_batch = y_batch.precipitation.fillna(np.log10(0.02)).values
+                y_batch = y_batch.precipitation.fillna(self.fill_value).values
                 y_batch = antialiaser(y_batch)
                 y_batch = torch.from_numpy(np.moveaxis(y_batch, 0, -1)).float()
 
             else:
                 y_batch = torch.from_numpy(
-                    y_batch.precipitation.fillna(np.log10(0.02)).values[:, :, :, None]
+                    y_batch.precipitation.fillna(self.fill_value).values[:, :, :, None]
                 ).float()
-            return (torch.cat((X_batch, constant_batch), dim=-1), y_batch)
+            if self.return_seeps:
+                seeps_batch = self.seeps_ds.sel(
+                    {
+                        "month": month_batch,
+                        "latitude": lat_batch,
+                        "longitude": lon_batch,
+                    }
+                )
+                return (
+                    torch.cat((X_batch, constant_batch), dim=-1),
+                    y_batch,
+                    (
+                        torch.tensor(seeps_batch["p1"].values, dtype=torch.float32),
+                        torch.tensor(seeps_batch["p3"].values, dtype=torch.float32),
+                        torch.tensor(seeps_batch["t2"].values, dtype=torch.float32),
+                        torch.tensor(seeps_batch["t3"].values, dtype=torch.float32),
+                    ),
+                )
+            else:
+                return (torch.cat((X_batch, constant_batch), dim=-1), y_batch)
 
 
 class BatchTruth(torch.utils.data.Dataset):
@@ -181,6 +212,7 @@ class BatchTruth(torch.utils.data.Dataset):
     def __init__(
         self,
         y,
+        seeps_dataset=seeps_dataset,
         batch_size=[4, 128, 128],
         weighted_sampler=True,
         for_NJ=False,
@@ -189,6 +221,8 @@ class BatchTruth(torch.utils.data.Dataset):
         antialiasing=False,
         transform=None,
         return_dataset=False,
+        return_seeps=False,
+        fill_value=np.log10(0.02),
     ):
 
         self.batch_size = batch_size
@@ -198,6 +232,8 @@ class BatchTruth(torch.utils.data.Dataset):
         self.antialiasing = antialiasing
         self.transform = transform
         self.return_dataset = return_dataset
+        self.fill_value = fill_value
+
         overlap = (
             {"latitude": int(batch_size[1] - 8), "longitude": int(batch_size[2] - 8)}
             if for_NJ
@@ -212,6 +248,8 @@ class BatchTruth(torch.utils.data.Dataset):
             },
             input_overlap=overlap,
         )
+        self.seeps_ds = seeps_dataset
+        self.return_seeps = return_seeps
 
         if weighted_sampler:
             if self.for_NJ:
@@ -247,6 +285,9 @@ class BatchTruth(torch.utils.data.Dataset):
     def __getitem__(self, idx):
 
         y_batch = self.y_generator[idx]
+        lat_batch = y_batch.lat.values
+        lon_batch = y_batch.lon.values
+        month = y_batch.time.dt.month.values
 
         if self.return_dataset:
             return y_batch
@@ -336,16 +377,31 @@ class BatchTruth(torch.utils.data.Dataset):
         else:
             if self.antialiasing:
                 antialiaser = Antialiasing()
-                y_batch = y_batch.precipitation.fillna(np.log10(0.02)).values
+                y_batch = y_batch.precipitation.fillna(self.fill_value).values
                 y_batch = antialiaser(y_batch)
                 y_batch = torch.tensor(np.moveaxis(y_batch, 0, -1), dtype=torch.float32)
 
             else:
                 y_batch = torch.tensor(
-                    y_batch.precipitation.fillna(np.log10(0.02)).values[:, :, :, None],
+                    y_batch.precipitation.fillna(self.fill_value).values[:, :, :, None],
                     dtype=torch.float32,
                 )
             if self.transform:
                 y_batch = self.transform(y_batch)
 
-            return y_batch
+            if self.return_seeps:
+                seeps_batch = self.seeps_ds.sel(
+                    {"month": month, "latitude": lat_batch, "longitude": lon_batch}
+                )
+                return (
+                    y_batch,
+                    (
+                        torch.tensor(seeps_batch["p1"].values, dtype=torch.float32),
+                        torch.tensor(seeps_batch["p3"].values, dtype=torch.float32),
+                        torch.tensor(seeps_batch["t2"].values, dtype=torch.float32),
+                        torch.tensor(seeps_batch["t3"].values, dtype=torch.float32),
+                    ),
+                )
+
+            else:
+                return y_batch

@@ -1,6 +1,7 @@
 import datetime
 import glob
 import time
+import warnings
 
 import h5py
 import numpy as np
@@ -130,45 +131,87 @@ def prepare_year_and_month_input(years, months):
     return year_beg, year_end, month_beg, month_end
 
 
-def retrieve_vars_ifs(field, all_data_mean, all_data_sd, start=1, end=2):
+def retrieve_vars_ifs(
+    field, all_data_mean, all_data_sd, start=1, end=2, day_average=False
+):
+    if day_average:
+        if field in ["tp", "cp", "ssr"]:
+            # return mean, sd, 0, 0.  zero fields are so
+            # that each field returns a 4 x ny x nx array.
+            # accumulated fields have been pre-processed
+            # s.t. data[:, j, :, :] has accumulation between times j and j+1
+            data1 = np.mean(all_data_mean[:, start:end, :, :], axis=1).reshape(
+                -1, all_data_mean.shape[2], all_data_mean.shape[3]
+            )
+            data2 = np.sqrt(
+                np.mean(all_data_sd[:, start:end, :, :] ** 2, axis=1)
+            ).reshape(-1, all_data_mean.shape[2], all_data_mean.shape[3])
 
-    if field in ["tp", "cp", "ssr"]:
-        # return mean, sd, 0, 0.  zero fields are so
-        # that each field returns a 4 x ny x nx array.
-        # accumulated fields have been pre-processed
-        # s.t. data[:, j, :, :] has accumulation between times j and j+1
-        data1 = all_data_mean[:, start:end, :, :].reshape(
-            -1, all_data_mean.shape[2], all_data_mean.shape[3]
-        )
-        data2 = all_data_sd[:, start:end, :, :].reshape(
-            -1, all_data_sd.shape[2], all_data_sd.shape[3]
-        )
-        data3 = np.zeros(data1.shape)
-        data = np.stack([data1, data2, data3, data3], axis=-1)[:, None, :, :, :]
+            data = np.stack([data1, data2], axis=-1)[:, None, :, :, :]
 
+        else:
+            temp_data_mean = all_data_mean[:, start : end + 1, :, :]
+            temp_data_var = all_data_sd[:, start : end + 1, :, :] ** 2
+            data1 = (
+                temp_data_mean[:, 0, :, :] / 2
+                + np.sum(temp_data_mean[:, 1:4, :, :], axis=1)
+                + temp_data_mean[:, 4, :, :] / 2
+            ) / 4
+            data2 = (
+                temp_data_var[:, 0, :, :] / 2
+                + np.sum(temp_data_var[:, 1:4, :, :], axis=1)
+                + temp_data_var[:, 4, :, :] / 2
+            ) / 4
+
+            data = np.stack(
+                [
+                    data1.reshape(-1, all_data_mean.shape[2], all_data_mean.shape[3]),
+                    np.sqrt(
+                        data2.reshape(
+                            -1, all_data_mean.shape[2], all_data_mean.shape[3]
+                        )
+                    ),
+                ],
+                axis=-1,
+            )[:, None, :, :, :]
     else:
-        temp_data_mean_start = all_data_mean[:, start:end, :, :].reshape(
-            -1, all_data_mean.shape[2], all_data_mean.shape[3]
-        )
-        temp_data_mean_end = all_data_mean[:, end : end + 1, :, :].reshape(
-            -1, all_data_mean.shape[2], all_data_mean.shape[3]
-        )
-        temp_data_sd_start = all_data_sd[:, start:end, :, :].reshape(
-            -1, all_data_sd.shape[2], all_data_sd.shape[3]
-        )
-        temp_data_sd_end = all_data_sd[:, end : end + 1, :, :].reshape(
-            -1, all_data_sd.shape[2], all_data_sd.shape[3]
-        )
+        if field in ["tp", "cp", "ssr"]:
+            # return mean, sd, 0, 0.  zero fields are so
+            # that each field returns a 4 x ny x nx array.
+            # accumulated fields have been pre-processed
+            # s.t. data[:, j, :, :] has accumulation between times j and j+1
+            data1 = all_data_mean[:, start : start + 1, :, :].reshape(
+                -1, all_data_mean.shape[2], all_data_mean.shape[3]
+            )
+            data2 = all_data_sd[:, end : end + 1, :, :].reshape(
+                -1, all_data_sd.shape[2], all_data_sd.shape[3]
+            )
+            data3 = np.zeros(data1.shape)
+            data = np.stack([data1, data2, data3, data3], axis=-1)[:, None, :, :, :]
 
-        data = np.stack(
-            [
-                temp_data_mean_start,
-                temp_data_sd_start,
-                temp_data_mean_end,
-                temp_data_sd_end,
-            ],
-            axis=-1,
-        )[:, None, :, :, :]
+        else:
+            temp_data_mean_start = all_data_mean[:, start : start + 1, :, :].reshape(
+                -1, all_data_mean.shape[2], all_data_mean.shape[3]
+            )
+            temp_data_mean_end = all_data_mean[:, end : end + 1, :, :].reshape(
+                -1, all_data_mean.shape[2], all_data_mean.shape[3]
+            )
+            temp_data_sd_start = all_data_sd[:, start : start + 1, :, :].reshape(
+                -1, all_data_sd.shape[2], all_data_sd.shape[3]
+            )
+            temp_data_sd_end = all_data_sd[:, end : end + 1, :, :].reshape(
+                -1, all_data_sd.shape[2], all_data_sd.shape[3]
+            )
+
+            data = np.stack(
+                [
+                    temp_data_mean_start,
+                    temp_data_sd_start,
+                    temp_data_mean_end,
+                    temp_data_sd_end,
+                ],
+                axis=-1,
+            )[:, None, :, :, :]
 
     return data
 
@@ -176,45 +219,51 @@ def retrieve_vars_ifs(field, all_data_mean, all_data_sd, start=1, end=2):
 def streamline_and_normalise_ifs(
     field,
     da,
-    log_prec=True,
+    log_prec=False,
+    sqrt_prec=True,
     norm=True,
     time_idx=None,
     split_steps=[5, 6, 7, 8, 9],
+    batch_type="6-hourly",
 ):
     """
-    Streamline IFS date to:
-    * Have appropriate valid time from time of forecast initialization
-    * If time_idx are provided then we directly select based on that
-    * Otherwise we select based on split_steps (default 30 - 54 hour lead time)
+        Streamline IFS date to:
+        * Have appropriate valid time from time of forecast initialization
+        * If time_idx are provided then we directly select based on that
+        * Otherwise we select based on split_steps (default 30 - 54 hour lead time)
 
-    Inputs
-    ------
+        Inputs
+        ------
 
-    field: str
-           field to select, needed to check accumulated or non-
-           negative field
-    da: xr.DataArray or xr.Dataset
-        data over which to streamline and normalise
-    log_prec: boolean
-              whether to calculate the log of precipitation,
-              default=True.
-    norm: boolean
-          whether to normalise or not, default = True
-    split_steps: list or 1-D array
-                 valid_time steps to iterate over
-                 default=[5,6,7,8,9]
-    time_idx: 1-D array or None
-              instead of split-steps if we have a more randomised
-              selection of valid time to operate on for each
-              initialisation time available
+        field: str
+               field to select, needed to check accumulated or non-
+               negative field
+        da: xr.DataArray or xr.Dataset
+            data over which to streamline and normalise
+        log_prec: boolean
+                  whether to calculate the log of precipitation,
+                  default=True.
+        norm: boolean
+              whether to normalise or not, default = True
+        split_steps: list or 1-D array
+                     valid_time steps to iterate over
+                     default=[5,6,7,8,9]
+        time_idx: 1-D array or None
+                  instead of split-steps if we have a more randomised
+                  selection of valid time to operate on for each
+                  initialisation time available
+    <<<<<<< HEAD
+    =======
+        batch_type: str 6- or 24- hourly default = 6-hourly
+    >>>>>>> f5904ed (updates)
 
-    Outputs
-    -------
+        Outputs
+        -------
 
-    xr.DataArray or xr.Dataset of streamline and normalised values
+        xr.DataArray or xr.Dataset of streamline and normalised values
 
-    NOTE: We replace the time with the valid time NOT initial fcst
-    time.
+        NOTE: We replace the time with the valid time NOT initial fcst
+        time.
 
     """
 
@@ -225,17 +274,15 @@ def streamline_and_normalise_ifs(
 
     if time_idx is None:
         times = np.hstack(
-            (
-                [
-                    time[split_steps[0] : split_steps[-1]]
-                    for time in da.fcst_valid_time.values
-                ]
-            )
+            ([time[split_steps[:-1]] for time in da.fcst_valid_time.values])
         )
     else:
-        if time_idx.shape[0] % 4 == 0:
-            time_idx = time_idx.reshape(-1, 4)
+        if batch_type == "6-hourly":
+            if time_idx.shape[0] % 4 == 0:
+                time_idx = time_idx.reshape(-1, 4)
+
         assert da.fcst_valid_time.values.shape[0] == time_idx.shape[0]
+
         times = np.hstack(
             (
                 [
@@ -248,15 +295,36 @@ def streamline_and_normalise_ifs(
     data = []
 
     if time_idx is None:
-        for start, end in zip(split_steps[:4], split_steps[1:5]):
+
+        if batch_type == "6-hourly":
+            day_average = False
+            assert np.all(split_steps == [5, 6, 7, 8, 9])
+        elif batch_type == "24-hourly":
+            day_average = True
+            assert np.all(split_steps == [5, 9])
+        else:
+            raise TypeError("batch type not recognised")
+        for start, end in zip(split_steps[:-1], split_steps[1:]):
 
             data.append(
                 retrieve_vars_ifs(
-                    field, all_data_mean, all_data_sd, start=start, end=end
+                    field,
+                    all_data_mean,
+                    all_data_sd,
+                    start=start,
+                    end=end,
+                    day_average=day_average,
                 )
             )
     else:
-
+        if batch_type == "6-hourly":
+            day_average = False
+            batch_offset = 1
+        elif batch_type == "24-hourly":
+            day_average = True
+            batch_offset = 4
+        else:
+            raise TypeError("batch type not recognised")
         for i_row, start in enumerate(time_idx):
             if isinstance(start, np.ndarray):
                 for s in start:
@@ -266,7 +334,8 @@ def streamline_and_normalise_ifs(
                             all_data_mean[[i_row]],
                             all_data_sd[[i_row]],
                             start=s,
-                            end=s + 1,
+                            end=s + batch_offset,
+                            day_average=day_average,
                         )
                     )
             else:
@@ -276,11 +345,19 @@ def streamline_and_normalise_ifs(
                         all_data_mean[[i_row]],
                         all_data_sd[[i_row]],
                         start=start,
-                        end=start + 1,
+                        end=start + batch_offset,
+                        day_average=day_average,
                     )
                 )
+    data = np.hstack((data))
 
-    data = np.hstack((data)).reshape(-1, da.latitude.shape[0], da.longitude.shape[0], 4)
+    channel_dim = 4
+    location_of_vals = [0, 2]
+    if day_average:
+        channel_dim = 2
+        location_of_vals = [0]
+    data = data.reshape(-1, da.latitude.shape[0], da.longitude.shape[0], channel_dim)
+
     da = xr.DataArray(
         data=data,
         dims=["time", "lat", "lon", "i_x"],
@@ -288,7 +365,7 @@ def streamline_and_normalise_ifs(
             lon=da.longitude.values,
             lat=da.latitude.values,
             time=times.flatten(),
-            i_x=np.arange(4),
+            i_x=np.arange(channel_dim),
         ),
     )
 
@@ -308,10 +385,10 @@ def streamline_and_normalise_ifs(
     ]:
         da = nonnegative(da)
 
-    da = convert_units(da, field, log_prec, m_to_mm=True)
+    da = convert_units(da, field, log_prec, sqrt_prec, m_to_mm=True)
 
     if norm:
-        da = get_norm(da, field)
+        da = get_norm(da, field, location_of_vals=location_of_vals)
 
     return da.where(np.isfinite(da), 0).sortby("time")
 
@@ -330,7 +407,7 @@ def get_IMERG_year(
 
     latitude, longitude = get_IMERG_lonlat()
 
-    # Load the IMERG data averaged over 6h periods
+    # Load the IMERG starting at 6am
     d = datetime.datetime(year_beg, month_beg, 1, 6)
 
     if year_end != year_beg:
@@ -352,16 +429,17 @@ def get_IMERG_year(
     # Number of 30 minutes rainfall periods
     num_time_pts = (d_end - d).days * 48
 
-    # The 6h average rainfall
+    # The 30 min rainfall
     rain_IMERG = np.full([num_time_pts, len(longitude), len(latitude)], np.nan)
 
     start_time = time.time()
 
     time_idx = 0
     progbar = tqdm(total=int((d_end - d).days) * 2 * 24)
+    print(np.arange(month_beg, month_end + 1))
     while d < d_end:
 
-        if d.month not in np.arange(month_beg, month_end):
+        if d.month not in np.arange(month_beg, month_end + 1):
             progbar.update(1)
             # Move to the next timesetp
             d += datetime.timedelta(minutes=30)
@@ -373,7 +451,7 @@ def get_IMERG_year(
         # Number of minutes since 00:00
         count = int((d - datetime.datetime(d.year, d.month, d.day)).seconds / 60)
         IMERG_file_name = (
-            "/network/group/aopp/predict/TIP021_MCRAECOOPER_IFS/IMERG_V07"
+            "/network/group/aopp/predict/AWH024_COOPERNATH_IFS/IFS/IMERG_V07"
             + "/%s/%s/" % (str(d.year), str(d.strftime("%b")))
             + f"3B-HHR.MS.MRG.3IMERG.{d.year}{d.month:02d}{d.day:02d}-S{d.hour:02d}{d.minute:02d}00-"
             + f"E{d2.hour:02d}{d2.minute:02d}{d2.second:02d}.{count:04d}.V07B.HDF5"
@@ -428,7 +506,14 @@ def get_IMERG_year(
     return obs.dropna("time", how="all")
 
 
-def load_truth_and_mask(dates, time_idx=[5, 6, 7, 8], log_precip=True, normalise=True):
+def load_truth_and_mask(
+    dates,
+    time_idx=[5, 6, 7, 8],
+    log_precip=True,
+    sqrt_precip=False,
+    use_climatology=True,
+    climatology=None,
+):
     """
     Returns a single (truth, mask) item of data.
     Parameters:
@@ -436,6 +521,9 @@ def load_truth_and_mask(dates, time_idx=[5, 6, 7, 8], log_precip=True, normalise
         time_idx: forecast 'valid time' array index
         log_precip: whether to apply log10(1+x) transformation
     """
+    if use_climatology:
+        assert climatology != None
+
     ds_to_concat = []
 
     for date in tqdm(dates):
@@ -448,7 +536,6 @@ def load_truth_and_mask(dates, time_idx=[5, 6, 7, 8], log_precip=True, normalise
             valid_dt = fcst_date + datetime.timedelta(
                 hours=int(idx_t) * time_res
             )  # needs to change for 12Z forecasts
-
             fname = valid_dt.strftime("%Y%m%d_%H")
             # print(fname)
 
@@ -459,8 +546,27 @@ def load_truth_and_mask(dates, time_idx=[5, 6, 7, 8], log_precip=True, normalise
             # axis=0)
             # for i,dataset in enumerate(data_path)],dim='time').mean('time')
             ds = xr.open_dataset(data_path[0])
+
             if log_precip:
-                ds["precipitation"] = logprec(ds["precipitation"])
+                if sqrt_precip:
+                    warnings.warn(
+                        "sqrt_precip is ignored when log_precip is True", UserWarning
+                    )
+                ds["precipitation"] = logprec(
+                    ds["precipitation"],
+                    use_climatology=use_climatology,
+                    climatology=climatology,
+                    ds=ds,
+                )
+            elif sqrt_precip:
+                if use_climatology:
+                    warnings.warn(
+                        "use_climatology is ignored when sqrt_precip is True",
+                        UserWarning,
+                    )
+                ds["precipitation"] = np.sqrt(ds["precipitation"])
+            else:
+                ds["precipitation"] = ds["precipitation"]
 
             # mask: False for valid truth data, True for invalid truth data
             # (compatible with the NumPy masked array functionality)
