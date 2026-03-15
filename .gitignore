@@ -2,4 +2,4 @@ __pycache__
 *.egg-info
 .flake8
 .pre-commit-config.yam
-.ipynb_checkpointsl
+.ipynb_checkpoints
