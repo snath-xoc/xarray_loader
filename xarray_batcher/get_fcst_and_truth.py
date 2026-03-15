@@ -355,7 +355,7 @@ def get_whole_year_ifs(
     months=[3, 4, 5, 6],
     n_days=None,
     split_steps=[5, 6, 7, 8, 9],
-    offset=24,
+    offset=None,
     ignore_truth=False,
     variables=None,
     clip_to_window=True,

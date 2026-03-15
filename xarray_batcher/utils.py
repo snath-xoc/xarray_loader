@@ -73,8 +73,9 @@ def daterange(start_date, end_date):
 def get_valid_dates(
     year,
     TIME_RES=TIME_RES,
-    start_hour=30,
-    end_hour=60,
+    start_hour=6,
+    end_hour=36,
+    offset=24,
     raw_list=False,
 ):
 
@@ -110,7 +111,7 @@ def get_valid_dates(
         valid = True
 
         ## then check for truth data at the desired lead time
-        for hr in np.arange(start_hour, end_hour, TIME_RES):
+        for hr in np.arange(start_hour + offset, end_hour + offset, TIME_RES):
             datestr_true = curdate + datetime.timedelta(hours=int(hr))
             datestr_true = datestr_true.strftime("%Y%m%d")
             fname = f"{datestr_true}_{(hr%24):02}"
